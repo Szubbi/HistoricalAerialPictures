@@ -23,20 +23,21 @@ class ImageConverter:
     
     def __init__(self, img_dir:str):
         self.img_dir = img_dir
-        self.img = cv2.imread(self.img_dir)
-        self.noise_img = None
+        self.src_img = cv2.imread(self.img_dir)
+        self.out_img = = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
         
         
-    def convert_image(self, kernel_size:int):
-        self.bw_img = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
-        
+    def blur(self, kernel_size:int):
         kernel = np.ones((kernel_size, kernel_size),np.float32)/25
-        avg_img = cv2.filter2D(self.bw_img, -1, kernel)
-        blured_img = cv2.GaussianBlur(avg_img, (5,5), 0)
-        self.noise_img = ski.util.random_noise(blured_img, mode='gaussian')
-        self.noise_img = np.uint8(self.noise_img * 255)
+        self.out_img = cv2.filter2D(self.out_img, -1, kernel)
+        self.out_img = cv2.GaussianBlur(self.out_img, (5,5), 0)
+        self.out_img = np.uint8(self.out_img * 255)
         
-        return self.noise_img, self.bw_img
+        
+    def noise(self, 
+        self.out_img = ski.util.random_noise(self.out_img, mode='gaussian')
+        self.out_img = np.uint8(self.out_img * 255)
+        
     
     #inspired by https://unimatrixz.com/topics/story-telling/analyzing-image-noise-using-opencv-and-python/
     @staticmethod
