@@ -14,24 +14,48 @@ import matplotlib.pyplot as plt
 import numpy as np
 import skimage as ski
 
+from typing import Union
+
+img_or_dir = Union[np.ndarray, str]
 
 
 class ImageConverter:
     
     def __init__(self, img_dir:str):
         self.img_dir = img_dir
+        self.img = cv2.imread(self.img_dir)
+        self.noise_img = None
         
         
     def convert_image(self, kernel_size:int):
-        self.img = cv2.imread(self.img_dir)
         self.bw_img = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
         
-        self.kernel = np.ones((kernel_size, kernel_size),np.float32)/25
-        self.avg_img = cv2.filter2D(self.bw_img, -1, self.kernel)
-        self.blured_img = cv2.GaussianBlur(self.avg_img, (5,5), 0)
-        self.noise_img = ski.util.random_noise(self.blured_img, mode='gaussian')
+        kernel = np.ones((kernel_size, kernel_size),np.float32)/25
+        avg_img = cv2.filter2D(self.bw_img, -1, kernel)
+        blured_img = cv2.GaussianBlur(avg_img, (5,5), 0)
+        self.noise_img = ski.util.random_noise(blured_img, mode='gaussian')
+        self.noise_img = np.uint8(self.noise_img * 255)
         
-        return self.noise_img
+        return self.noise_img, self.bw_img
+    
+    #inspired by https://unimatrixz.com/topics/story-telling/analyzing-image-noise-using-opencv-and-python/
+    @staticmethod
+    def estimate_noise(img_dir:img_or_dir):
+        if os.path.isfile(img_dir):
+            img = cv2.imread(img_dir)
+        elif type(img_dir) == np.ndarray:
+            img = img_dir
+        else:
+            raise TypeError('Input must be image array or image dir')
+        
+        #image has to be grayscale
+        if len(img.shape) > 2:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        blured_img = cv2.GaussianBlur(img, (5,5), 0)   
+        
+        noise = img - blured_img
+                
+        return np.mean(noise), np.std(noise)
         
     
     def save(self, dst_dir:str):
@@ -41,7 +65,7 @@ class ImageConverter:
             crs = src.crs
     
         raster_meta = {'driver': 'GTiff',
-                       'dtype': self.noise_img.dtype, 
+                       'dtype': 'uint8', 
                        'nodata': None,
                        'height': self.noise_img.shape[0], 
                        'width': self.noise_img.shape[1], 
@@ -57,12 +81,21 @@ if __name__ == "__main__":
     orto_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/01_InData/06_Orto'
     dst_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing'
     img_dir = os.path.join(orto_dir, '79045_1296512_M-34-74-A-b-3-4.tif')
-    dst_img = os.path.join(dst_dir, 'test_03.tif')
+    dst_img = os.path.join(dst_dir, 'test_04.tif')
     
     ImageConv = ImageConverter(img_dir)
-    ImageConv.convert_image(5)
+    noise_img, bw_img = ImageConv.convert_image(5)
+    
+    ImageConverter.estimate_noise(img)
+    ImageConverter.estimate_noise('/home/pszubert/Pobrane/17_37262_M-34-64-D-a-4-4.tif')
+    
+    img = cv2.imread(img_dir)
     ImageConv.save(dst_img)
+    
+    type(img)
 
+    plt.figure(figsize=(24,24))
+    plt.imshow(noise_img, cmap='gray')
+    plt.show()
 
-
-
+len(img.shape)
