@@ -24,7 +24,15 @@ class ImageConverter:
     def __init__(self, img_dir:str):
         self.img_dir = img_dir
         self.src_img = cv2.imread(self.img_dir)
-        self.out_img = = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
+        self.out_img = cv2.cvtColor(self.src_img, cv2.COLOR_BGR2GRAY)
+        
+        
+    def __str__(self):
+        return f'Image converter Class with {self.out_img.shape}'
+        
+    
+    def __call__(self):
+        return self.out_img
         
         
     def blur(self, kernel_size:int):
@@ -34,8 +42,8 @@ class ImageConverter:
         self.out_img = np.uint8(self.out_img * 255)
         
         
-    def noise(self, 
-        self.out_img = ski.util.random_noise(self.out_img, mode='gaussian')
+    def noise(self, std_dev): 
+        self.out_img = ski.util.random_noise(self.out_img, mode='gaussian', var=std_dev)
         self.out_img = np.uint8(self.out_img * 255)
         
     
@@ -68,8 +76,8 @@ class ImageConverter:
         raster_meta = {'driver': 'GTiff',
                        'dtype': 'uint8', 
                        'nodata': None,
-                       'height': self.noise_img.shape[0], 
-                       'width': self.noise_img.shape[1], 
+                       'height': self.out_img.shape[0], 
+                       'width': self.out_img.shape[1], 
                        'count': 1, 
                        'crs': crs, 
                        'transform': transform}
@@ -77,6 +85,7 @@ class ImageConverter:
         with rio.open(dst_img, 'w', **raster_meta) as dst:
             dst.write(self.noise_img, 1)
             
+
             
 if __name__ == "__main__":
     orto_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/01_InData/06_Orto'
@@ -84,10 +93,10 @@ if __name__ == "__main__":
     img_dir = os.path.join(orto_dir, '79045_1296512_M-34-74-A-b-3-4.tif')
     dst_img = os.path.join(dst_dir, 'test_04.tif')
     
-    ImageConv = ImageConverter(img_dir)
+    ImageConv = ImageConverter(r"C:\Users\pzu\Documents\01_Projekty\03_HistoricalAerial\17_37262_M-34-64-D-a-4-4.tif")
     noise_img, bw_img = ImageConv.convert_image(5)
     
-    ImageConverter.estimate_noise(img)
+    ImageConverter.estimate_noise(img_dir)
     ImageConverter.estimate_noise('/home/pszubert/Pobrane/17_37262_M-34-64-D-a-4-4.tif')
     
     img = cv2.imread(img_dir)
@@ -99,4 +108,3 @@ if __name__ == "__main__":
     plt.imshow(noise_img, cmap='gray')
     plt.show()
 
-len(img.shape)
