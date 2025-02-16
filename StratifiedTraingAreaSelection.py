@@ -12,18 +12,8 @@ import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import KBinsDiscretizer
+from util import save_datarame_sqllite, load_sqllite_dataframe
 
-
-def load_sqllite_dataframe(sql_dir:str, table_name:str):
-    connection = sqlite3.connect(sql_dir)
-    df = pd.read_sql_query(f'SELECT * FROM {table_name}', connection)
-    
-    return df
-
-def save_datarame_sqllite(df:pd.DataFrame, sql_dir:str, table_name:str):
-    connection = sqlite3.connect(sql_dir)
-    df.to_sql(table_name, connection)
-    connection.close()
 
 
 if __name__ == '__main__':

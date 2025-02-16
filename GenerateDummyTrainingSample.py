@@ -14,10 +14,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 import skimage as ski
 
+from skopt import gp_minimize
+from skopt.space import Real
 from typing import Union
 
 img_or_dir = Union[np.ndarray, str]
 
+"""
+To implement:
+    
+#vDefine the parameter space
+param_space = [Real(0.0, 10.0, name='blur_param'), Real(0.0, 1.0, name='noise_param')]
+
+# Perform Bayesian Optimization
+result = gp_minimize(objective, param_space, n_calls=50, random_state=0)
+best_blur_param, best_noise_param = result.x
+
+"""
 
 class ImageConverter:
     
@@ -25,6 +38,8 @@ class ImageConverter:
         self.img_dir = img_dir
         self.src_img = cv2.imread(self.img_dir)
         self.out_img = cv2.cvtColor(self.src_img, cv2.COLOR_BGR2GRAY)
+        self.blur_lvl_src = None
+        self.noise_lvl_src = None
         
         
     def __str__(self):
@@ -60,11 +75,54 @@ class ImageConverter:
         #image has to be grayscale
         if len(img.shape) > 2:
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            
         blured_img = cv2.GaussianBlur(img, (5,5), 0)   
-        
         noise = img - blured_img
                 
-        return np.mean(noise), np.std(noise)
+        return np.std(noise)
+    
+    
+    @staticmethod
+    def estimate_blur(img_dir:img_or_dir):
+        if os.path.isfile(img_dir):
+            img = cv2.imread(img_dir)
+        elif type(img_dir) == np.ndarray:
+            img = img_dir
+        else:
+            raise TypeError('Input must be image array or image dir')
+        
+        #image has to be grayscale
+        if len(img.shape) > 2:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            
+        blur = cv2.Laplacian(img, cv2.CV_64F).var()
+        
+        return blur
+    
+
+    def meassure_src_img(self):
+        blur_lvl_src = self.estimate_blur(self.src_img)
+        noise_lvl_src = self.noise(self.src_img)
+        
+                
+    
+    
+    def find_convertion_values(self, blur_kernel:int, noise_std_dev:float):
+        if self.blur_lvl_src is None or self.noise_lvl_src is None:
+            print('Meassuring source image statistics first')
+            self.meassure_src_img()
+        
+        
+        blured_img = self.blur(blur_kernel)
+        noise_img = self.noise(noise_std_dev)
+        
+        blur_lvl = self.estimate_blur(noise_img)
+        noise_lvl = self.estimate_noise(noise_img)
+        
+        
+               
+        
+        pass
         
     
     def save(self, dst_dir:str):
@@ -93,8 +151,9 @@ if __name__ == "__main__":
     img_dir = os.path.join(orto_dir, '79045_1296512_M-34-74-A-b-3-4.tif')
     dst_img = os.path.join(dst_dir, 'test_04.tif')
     
-    ImageConv = ImageConverter(r"C:\Users\pzu\Documents\01_Projekty\03_HistoricalAerial\17_37262_M-34-64-D-a-4-4.tif")
-    noise_img, bw_img = ImageConv.convert_image(5)
+    ImageConv = ImageConverter(img_dir)
+    ImageConv()
+    
     
     ImageConverter.estimate_noise(img_dir)
     ImageConverter.estimate_noise('/home/pszubert/Pobrane/17_37262_M-34-64-D-a-4-4.tif')

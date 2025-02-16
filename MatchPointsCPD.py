@@ -14,20 +14,9 @@ import xmltodict
 import matplotlib.pyplot as plt
 
 from functools import partial
+from util import read_annotations_xml
 
-def read_annotations_xml(xml_dir:str) -> np.array:
-    with open(xml_dir, 'r') as xml:
-        xml_data = xml.read()
-        
-    xml_dict = xmltodict.parse(xml_data)
-    out_points = []
-    
-    for points_dict in xml_dict['annotations']['image']['points']:
-        out_points.extend(
-            [[float(pnt) for pnt in _.split(',')] 
-             for _ in points_dict['@points'].split(';')])
-    
-    return np.array(out_points)
+
 
 def visualize_callback(iteration, error, X, Y, ax):
     plt.cla()
