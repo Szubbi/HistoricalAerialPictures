@@ -18,28 +18,21 @@ from skopt import gp_minimize
 from skopt.space import Real
 from typing import Union
 
+
 img_or_dir = Union[np.ndarray, str]
 
-"""
-To implement:
-    
-#vDefine the parameter space
-param_space = [Real(0.0, 10.0, name='blur_param'), Real(0.0, 1.0, name='noise_param')]
-
-# Perform Bayesian Optimization
-result = gp_minimize(objective, param_space, n_calls=50, random_state=0)
-best_blur_param, best_noise_param = result.x
-
-"""
 
 class ImageConverter:
     
     def __init__(self, img_dir:str):
         self.img_dir = img_dir
+        self.img_nme = img_dir.split('/')[-1]
         self.src_img = cv2.imread(self.img_dir)
         self.out_img = cv2.cvtColor(self.src_img, cv2.COLOR_BGR2GRAY)
-        self.blur_lvl_src = None
-        self.noise_lvl_src = None
+        self.blur_lvl_trg = None
+        self.noise_lvl_trg = None
+        self.best_blur_lvl = None
+        self.best_noise_lvl = None
         
         
     def __str__(self):
@@ -48,29 +41,39 @@ class ImageConverter:
     
     def __call__(self):
         return self.out_img
-        
-        
-    def blur(self, kernel_size:int):
-        kernel = np.ones((kernel_size, kernel_size),np.float32)/25
-        self.out_img = cv2.filter2D(self.out_img, -1, kernel)
-        self.out_img = cv2.GaussianBlur(self.out_img, (5,5), 0)
-        self.out_img = np.uint8(self.out_img * 255)
-        
-        
-    def noise(self, std_dev): 
-        self.out_img = ski.util.random_noise(self.out_img, mode='gaussian', var=std_dev)
-        self.out_img = np.uint8(self.out_img * 255)
-        
-    
-    #inspired by https://unimatrixz.com/topics/story-telling/analyzing-image-noise-using-opencv-and-python/
-    @staticmethod
-    def estimate_noise(img_dir:img_or_dir):
+
+
+    def load_img(self, img_dir:img_or_dir):
         if os.path.isfile(img_dir):
             img = cv2.imread(img_dir)
         elif type(img_dir) == np.ndarray:
             img = img_dir
         else:
             raise TypeError('Input must be image array or image dir')
+            
+        return img
+        
+        
+    def blur(self, img, kernel_size:int):
+        kernel = np.ones((kernel_size, kernel_size),np.float32)/25
+        img = cv2.filter2D(img, -1, kernel)
+        img = cv2.GaussianBlur(img, (5,5), 0)
+        img = np.uint8(img * 255)
+        
+        return img
+        
+        
+    def noise(self, img, std_dev): 
+        img = ski.util.random_noise(img, mode='gaussian', var=std_dev)
+        img = np.uint8(img * 255)
+        
+        return img
+        
+    
+    #inspired by https://unimatrixz.com/topics/story-telling/analyzing-image-noise-using-opencv-and-python/
+    @staticmethod
+    def estimate_noise(img_dir:img_or_dir):
+        img = ImageConverter.load_img(None, img_dir)      
         
         #image has to be grayscale
         if len(img.shape) > 2:
@@ -84,12 +87,7 @@ class ImageConverter:
     
     @staticmethod
     def estimate_blur(img_dir:img_or_dir):
-        if os.path.isfile(img_dir):
-            img = cv2.imread(img_dir)
-        elif type(img_dir) == np.ndarray:
-            img = img_dir
-        else:
-            raise TypeError('Input must be image array or image dir')
+        img = ImageConverter.load_img(None, img_dir)
         
         #image has to be grayscale
         if len(img.shape) > 2:
@@ -100,33 +98,71 @@ class ImageConverter:
         return blur
     
 
-    def meassure_src_img(self):
-        blur_lvl_src = self.estimate_blur(self.src_img)
-        noise_lvl_src = self.noise(self.src_img)
+    def meassure_trg_img(self, trg_img_dir:img_or_dir):
+        trg_img = self.load_img(trg_img_dir)
+        
+        #image has to be grayscale
+        if len(trg_img.shape) > 2:
+            trg_img = cv2.cvtColor(trg_img, cv2.COLOR_BGR2GRAY)
+        
+        self.blur_lvl_trg = self.estimate_blur(trg_img)
+        self.noise_lvl_trg = self.estimate_noise(trg_img)
         
                 
-    
-    
-    def find_convertion_values(self, blur_kernel:int, noise_std_dev:float):
-        if self.blur_lvl_src is None or self.noise_lvl_src is None:
-            print('Meassuring source image statistics first')
-            self.meassure_src_img()
+    def asses_convertion_values(self, params):
+        blur_kernel, noise_std_dev = params
         
+        blured_img = self.blur(self.out_img, int(blur_kernel))
+        noise_img = self.noise(blured_img, noise_std_dev)
         
-        blured_img = self.blur(blur_kernel)
-        noise_img = self.noise(noise_std_dev)
-        
-        blur_lvl = self.estimate_blur(noise_img)
+        blur_lvl = self.estimate_blur(blured_img)
         noise_lvl = self.estimate_noise(noise_img)
         
+        blur_difference = abs(blur_lvl - self.blur_lvl_trg)
+        noise_difference = abs(noise_lvl - self.noise_lvl_trg)
+        total_difference = blur_difference + noise_difference
         
-               
-        
-        pass
-        
+        return total_difference
     
+    
+    def find_convertion_values(self, max_blur:float, max_noise:float, epochs:int):
+        if self.blur_lvl_trg is None or self.noise_lvl_trg is None:
+            print('Meassuring source image statistics first')
+            self.meassure_src_img()
+            
+        assert max_noise <= 1.0, 'Noise std dev can not be larger than 1.0'
+            
+        print(f'Source Image {self.img_nme} statistics:',
+              f' -Blur: {self.blur_lvl_trg}',
+              f' -Noise: {self.noise_lvl_trg}',
+              sep = os.linesep)
+        
+        param_space = [
+            Real(1.0, max_blur, name = 'blur_kernel'),
+            Real(0.1, max_noise, name = 'noise_std_dev')]
+        
+        result = gp_minimize(self.asses_convertion_values,
+                             param_space, 
+                             n_calls=epochs, 
+                             random_state=40,
+                             n_initial_points=10,
+                             acq_func="EI")
+        
+        self.best_blur_lvl, self.best_noise_lvl = result.x
+        
+        print(f'Best blur param: {self.best_blur_lvl}',
+              f'Best noise param: {self.best_noise_lvl}',
+              sep = os.linesep)
+        
+        return self.best_blur_lvl, self.best_noise_lvl
+    
+    
+    def convert_image(self):
+        self.out_img = self.blur(self.out_img, self.best_blur_lvl)
+        self.out_img = self.noise(self.out_img, self.best_noise_lvl)
+        
+            
     def save(self, dst_dir:str):
-
         with rio.open(self.img_dir) as src:
             transform = src.transform
             crs = src.crs
@@ -150,20 +186,28 @@ if __name__ == "__main__":
     dst_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing'
     img_dir = os.path.join(orto_dir, '79045_1296512_M-34-74-A-b-3-4.tif')
     dst_img = os.path.join(dst_dir, 'test_04.tif')
+    trg_img = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/01_InData/07_Orto_bw/17_37262_M-34-64-D-a-4-4.tif'
     
     ImageConv = ImageConverter(img_dir)
-    ImageConv()
+    ImageConv.meassure_trg_img(trg_img)
+    ImageConv.find_convertion_values(max_blur = 10, 
+                                     max_noise = 1.0, 
+                                     epochs = 75)   
+    
+    ImageConverter.estimate_noise()
     
     
-    ImageConverter.estimate_noise(img_dir)
-    ImageConverter.estimate_noise('/home/pszubert/Pobrane/17_37262_M-34-64-D-a-4-4.tif')
-    
-    img = cv2.imread(img_dir)
-    ImageConv.save(dst_img)
-    
-    type(img)
 
-    plt.figure(figsize=(24,24))
-    plt.imshow(noise_img, cmap='gray')
-    plt.show()
 
+    orto_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/08_Ostrodzki_Probka'
+
+    for _ in os.listdir(orto_dir):
+        if _.endswith('.tif'):
+            img_dir = os.path.join(orto_dir, _)
+            img = cv2.imread(img_dir)
+            
+            print(
+                f'Img name: {_}',
+                f'- noise: {ImageConverter.estimate_noise(img)}',
+                f'- blur {ImageConverter.estimate_blur(img)}',
+                sep = os.linesep)

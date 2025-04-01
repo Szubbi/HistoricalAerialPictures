@@ -8,6 +8,7 @@ Created on Sat Jan 25 19:28:45 2025
 """
 import sqlite3
 import pandas as pd
+import geopandas as gpd
 import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
@@ -19,8 +20,11 @@ from util import save_datarame_sqllite, load_sqllite_dataframe
 if __name__ == '__main__':
     sql_dir = '/media/pszubert/DANE/Uniwersytet Jagielloński/PhD Seminar - Piotrs_work - Piotrs_work/02_Budynki_MapJournal/02_Data/BudynkiPolskaDB.gpkg'
     table_name = 'bd_siatka1970_2km_02'
+    dst_db = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/Data.gpkg'
     
-    buildings_grid_df = load_sqllite_dataframe(sql_dir, table_name)
+    #buildings_grid_df = load_sqllite_dataframe(sql_dir, table_name)
+    buildings_grid_df = gpd.read_file(sql_dir, layer = table_name)
+    buildings_grid_df = buildings_grid_df[buildings_grid_df['Point_Count'] > 200]
     buildings_number = buildings_grid_df['Point_Count'].to_numpy().reshape(-1,1)
     
     # putting records into classes for stratified sampling
@@ -54,7 +58,8 @@ if __name__ == '__main__':
     train_df = buildings_grid_df[buildings_grid_df['OBJECTID'].isin(X_train)]
     
     # saving choosen areas back to the geopackage
-    save_datarame_sqllite(train_df, sql_dir, 'bd_trainingAreas_00')
+    #save_datarame_sqllite(train_df, sql_dir, 'bd_trainingAreas_12')
+    train_df.to_file(dst_db, layer = 'obszaryTestowe_01')
     
     
     
