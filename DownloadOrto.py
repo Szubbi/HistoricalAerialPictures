@@ -65,7 +65,7 @@ def flip_geom(geom):
             return geom
 
 def download_img(src_url, dst_dir):
-    image_name = src_url.spli('/')[-1]
+    image_name = src_url.split('/')[-1]
     img_dst_dir = os.path.join(dst_dir, image_name)
     try:
         response = requests.get(src_url)
@@ -81,6 +81,7 @@ if __name__ == "__main__":
     url = 'https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WFS/Skorowidze'
     layer_name = 'gugik:SkorowidzOrtofomapy2024'
     db_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/Data.gpkg'
+    dst_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/01_InData/07_Orto_bw'
     training_areas_gdf = gpd.read_file(db_dir, layer = 'obszaryTestowe_01')
     columns = ['gml_id', 'godlo', 'akt_rok', 'piksel', 'kolor', 'zrodlo_danych',
                'uklad_xy', 'modul_archiwizacji', 'nr_zglosz', 'akt_data', 
@@ -92,7 +93,7 @@ if __name__ == "__main__":
     not_overlapped_areas = training_areas_gdf
     
     # creating gdf with tiles to download
-    for orto_layer in wfs_layers[:5]:
+    for orto_layer in ['gugik:SkorowidzOrtofomapy2003']: #wfs_layers[:5]:
         orto_layer_gdf = download_wfs_polygons(url, orto_layer)
         orto_layer_gdf['geometry'] = orto_layer_gdf['geometry'].apply(flip_geom)
         print(f'pobrano: {orto_layer}')
@@ -111,11 +112,16 @@ if __name__ == "__main__":
         if len(not_overlapped_areas) == 0:
             print('All test areas covered by Ortos')
             break
-        
-    orto_gdf.to_file(db_dir, layer = 'ortoDoPobrania_04')
+   
+    set(orto_gdf['piksel'].to_list())     
+    orto_gdf = orto_gdf[orto_gdf['kolor'] == 'B/W']
+    
+    orto_gdf.to_file(db_dir, layer='downloaded_orto_BW_00')
     
     
     # downloading ortos 
+    for orto_url in orto_gdf['url_do_pobrania'].to_list():
+        download_img(orto_url, dst_dir)
     
 
     

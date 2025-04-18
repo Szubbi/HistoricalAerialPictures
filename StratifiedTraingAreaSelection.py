@@ -6,14 +6,11 @@ Created on Sat Jan 25 19:28:45 2025
 @author: piotr.szubert@doctoral.uj.edu.pl
 
 """
-import sqlite3
-import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import KBinsDiscretizer
-from util import save_datarame_sqllite, load_sqllite_dataframe
 
 
 
@@ -53,13 +50,13 @@ if __name__ == '__main__':
     test_size = 1 - 200/len(bd_df)
     
     X_train, X_test, y_train, y_test = train_test_split(
-        bd_idx, classes, test_size=test_size, random_state=42, stratify=classes)
+        bd_idx, classes, test_size=test_size, stratify=classes)
     
     train_df = buildings_grid_df[buildings_grid_df['OBJECTID'].isin(X_train)]
     
     # saving choosen areas back to the geopackage
     #save_datarame_sqllite(train_df, sql_dir, 'bd_trainingAreas_12')
-    train_df.to_file(dst_db, layer = 'obszaryTestowe_01')
+    train_df.to_file(dst_db, layer = 'obszaryPomiaruOrtoBW_02')
     
     
     

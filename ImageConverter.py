@@ -44,10 +44,10 @@ class ImageConverter:
 
 
     def load_img(self, img_dir:img_or_dir):
-        if os.path.isfile(img_dir):
-            img = cv2.imread(img_dir)
-        elif type(img_dir) == np.ndarray:
+        if type(img_dir) == np.ndarray:
             img = img_dir
+        elif os.path.isfile(img_dir):
+            img = cv2.imread(img_dir)
         else:
             raise TypeError('Input must be image array or image dir')
             
