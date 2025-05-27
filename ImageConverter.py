@@ -394,7 +394,8 @@ class ImageConverter:
                              n_calls=epochs, 
                              random_state=40,
                              n_initial_points=10,
-                             acq_func="EI")
+                             acq_func="EI",
+                             n_jobs=-1)
 
         self.best_blur_lvl, self.best_noise_lvl, self.best_blur_alpha, \
         self.best_noise_alpha, self.clip_limit, self.blur_sigma, \
