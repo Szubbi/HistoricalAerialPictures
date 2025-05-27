@@ -12,13 +12,15 @@ import matplotlib.pyplot as plt
 
 from cv2 import imread
 
-def get_coordinates(coords_str_list:list) -> list:
+def get_coordinates(coords_str_list:str) -> list:
     points_tupples = []
+    coords_str_list = [_.strip()[1:] for _ in coords_str_list.split('\n')]
     
     for str_point_list in coords_str_list:
-        for str_coordinates in str_point_list.split(';'):
-            coords = tuple(float(_) for _ in str_coordinates.split(','))
-            points_tupples.append(coords)
+        for str_coordinates in str_point_list.split(' '):
+            if len(str_coordinates) > 1:
+                coords = tuple(float(_)*640 for _ in str_coordinates.split(','))
+                points_tupples.append(coords)
            
             
     return points_tupples
@@ -26,22 +28,43 @@ def get_coordinates(coords_str_list:list) -> list:
 def display_points_image(img_dir:str, points_tupples:list):
     x_crds, y_crds = zip(*points_tupples)
     
-    plt.figure(figsize=(14,14))
+    plt.figure(figsize=(16,9))
+    
+    plt.subplot(121)
     plt.imshow(imread(img_dir), cmap='gray')
-    plt.scatter(x_crds, y_crds, color = 'red', marker='x')
+    plt.title('Raw Image')
+    
+    plt.subplot(122)
+    plt.imshow(imread(img_dir), cmap='gray')
+    plt.scatter(x_crds, y_crds, color = 'red', marker='x')    
+    plt.title('Image with Labels')
+      
+    
     plt.show()
+    
+
+def display_yolo_annotations(img_dir:str, polygons_txt:str, patch_size=int):
+    fig, axes = plt.subplots(1, 2, figsize=(16, 9))
+    polygons = polygons_txt.strip().split('\n')
+
+    axes[0].imshow(imread(img_dir), cmap='gray')
+    axes[0].set_title('Raw Image')
+    
+    axes[1].imshow(imread(img_dir), cmap='gray')
+    # Iterate over each polygon
+    for polygon in polygons:
+        coords = polygon.split(' ')[1:]  # Skip the leading '0'
+        if len(coords) > 1:
+            x_coords = [float(pair.split(',')[0]) * patch_size for pair in coords]
+            y_coords = [float(pair.split(',')[1]) * patch_size for pair in coords]
+            axes[1].fill(x_coords, y_coords, color='blue', alpha=0.5)
+    axes[1].set_title('Image with Labels')
+    
+
+    plt.tight_layout()
+    plt.show()
+
     
     
 if __name__ == '__main__':
-    points_cvat = [
-        "1099.00,1663.43;1163.49,1662.49;1529.49,2111.30;1712.49,2423.47",
-        "2003.82,2451.55;1899.43,2576.50;1969.20,2583.53",
-        "2632.74,2487.31;2685.08,2534.98;2624.33,2755.55;2607.50,2858.36;2539.28,2970.52;2488.81,2893.88;2393.47,2884.53;2381.32,3011.64;2347.67,3076.13;2427.12,3140.62;2584.14,3140.62;2488.81,3215.39;2481.98,3343.72;2551.15,3444.66;2701.62,3552.14;2785.74,3256.80;2904.44,3190.44;2843.69,3293.25;2863.31,3405.41;3025.01,3411.01;3113.80,3273.62;3028.75,3200.72;3018.46,3069.87;3109.69,3028.37;3281.10,3274.09;3197.73,3383.16;3147.91,3489.06;3089.50,3647.94;3261.66,3704.86;3214.93,3612.15;3248.39,3547.47;3038.37,3478.77;3441.11,3502.23;3487.19,3645.05;3424.94,3718.42;3404.84,3946.75;3497.93,3960.21;3408.21,4037.59;3611.21,3748.23;3720.00,3721.31;3732.34,3529.53;3824.31,3514.94;3829.92,3634.95;3598.41,3323.90;3669.63,3273.43;3716.45,3327.92;3990.12,3544.57;4071.15,3565.60;4147.51,3677.76;4079.75,3747.11;3957.40,3853.75;4335.18,3778.23;4284.53,3673.09;4367.15,3601.40;4406.87,3736.17;4254.15,3927.77;4227.70,3990.86;4296.21,3988.53;4437.99,3932.45;4547.81,3928.52;4518.19,4051.61;4543.89,3827.30;4584.45,3726.83;4885.22,3687.48;4875.87,3750.10;4763.72,3988.43;4842.23,4119.28;4992.70,4006.19;4988.03,3895.90;5207.58,3899.92;5140.75,4027.13;5027.56,4200.13;4975.04,4280.60;4978.31,4413.04;5251.32,4285.83;5243.47,4150.13;5328.70,4202.84;5240.10,3843.94;5316.37,3847.30;5450.68,3861.32;5456.10,3945.16;5367.87,3857.49;5588.63,3799.64;5669.66,3866.37;5616.39,3976.66;5535.26,4046.10;5559.93,4104.52;5624.24,4187.60;5725.46,4051.99;5803.50,3704.21;5745.55,3801.41;5953.04,3929.46;6023.14,3818.24;5988.56,4074.33;6969.46,4149.47;6874.13,4227.98;6925.72,4306.49;7114.15,4215.64;8291.42,4269.20;8377.78,4256.86;8323.94,4371.26", 
-        "9846.53,3929.28;9856.21,4058.49;10087.17,3649.88;10177.61,3745.17;10613.35,4196.41;10704.93,4173.16;10664.71,4290.89;11176.68,3972.89;11193.80,4056.23;11408.77,4140.37;11422.82,4072.70;11580.93,3908.29;11559.13,4019.73;12881.38,3564.12;12972.47,3582.05;5889.48,7551.85;5833.27,7445.26;6034.83,7588.68;6897.27,7080.90;6998.05,7061.52;6967.04,7181.68;6187.13,12964.07;6040.48,13053.06;6306.48,13049.18;6281.77,12763.48;6304.55,12634.43;6368.02,12724.55;6173.73,12664.47;489.70,10172.44;689.64,10329.43;705.63,10424.71;643.94,10545.36;551.39,10313.44;461.60,10443.45;2012.53,5611.53;2122.84,5648.83;2158.54,5747.84;2063.25,5762.37;2051.94,5865.09;2542.43,6321.34;2411.29,5174.33;2485.26,5100.36;3145.82,4989.24;3541.02,4442.71;3504.04,4577.73;3587.21,4530.25;3617.09,4480.34" 
-    ]
-    
-    points_tupples = get_coordinates(points_cvat)
-    pictures_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/08_Ostrodzki_Probka'
-    img_dir = os.path.join(pictures_dir, '11_4229.tif')
-    
-    display_points_image(img_dir, points_tupples)
+    pass
