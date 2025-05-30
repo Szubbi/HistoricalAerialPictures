@@ -69,23 +69,35 @@ def setup_logger(name='ImageConverterLogger', log_file='image_converter.log', le
 class ImageConverter:
     
     def __init__(self, img_dir:str, log_dir:str):
+        # Image paths and data
         self.img_dir = img_dir
-        self.img_nme = img_dir.split('/')[-1]
+        self.img_nme = os.path.basename(img_dir)
         self.src_img = cv2.imread(self.img_dir)
         self.out_img = cv2.cvtColor(self.src_img, cv2.COLOR_BGR2GRAY)
+
+        # Intermediate processing
         self.blurred_img = None
         self.noise_img = None
+
+        # Target statistics
         self.blur_lvl_trg = None
         self.noise_lvl_trg = None
+        self.contrast_lvl_trg = None
         self.hist_trg = None
+
+        # Best parameters from optimization
         self.best_blur_lvl = None
         self.best_blur_alpha = None
-        self.best_noise_alpha = None
         self.best_noise_lvl = None
+        self.best_noise_alpha = None
         self.best_clip_limit = None
         self.best_unsharp_strength = None
         self.blur_sigma = None
+
+        # Optimization tracking
         self.convertion_values = {}
+
+        # Logging
         self.logger = setup_logger(name = f'ImageConverter_{self.img_nme}_logger',
                                    log_file = os.path.join(log_dir,
                                                            f'ImageConverter_{self.img_nme}_logger_{datetime.now()}.log'))
@@ -175,8 +187,10 @@ class ImageConverter:
                                             self.noise_img, 1 - alpha, 0)
         else:
             raise Exception('Modes DO NOT WORK')
-            
-        self.out_img = blended_image        
+
+        # prevents overflow or underflow in pixel values after blending    
+        self.out_img = np.clip(blended_image, 0, 255).astype(np.uint8)
+
         return blended_image
         
     
@@ -238,6 +252,20 @@ class ImageConverter:
         hist = cv2.calcHist([img], [0], None, [256], [0, 256])
         return hist.flatten()
     
+    @staticmethod
+    def estimate_contrast(img_dir:img_or_dir):
+        """
+        Michelson contrast
+        Peli, E. (1990). Contrast in complex images. Journal of the Optical Society of America A, 7(10), 2032–2040.
+        """
+        img = ImageConverter.load_img(None, img_dir)
+        if len(img.shape) > 2:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        I_max = np.max(img)
+        I_min = np.min(img)
+        return (I_max - I_min) / (I_max + I_min + 1e-5)  # Avoid division by zero
+
+    
     
     # Below methoods are used together to reduce the foggy appearance in images 
     # by enhancing contrast and sharpness.
@@ -253,6 +281,7 @@ class ImageConverter:
         Parameters:
         - clip_limit: Threshold for contrast limiting. Higher values give more contrast.
         """
+        clip_limit = max(1.0, min(clip_limit, 3.0)) # save limit
         clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(8,8))
         self.out_img = clahe.apply(self.out_img)
 
@@ -296,6 +325,7 @@ class ImageConverter:
         self.blur_lvl_trg = self.estimate_blur(trg_img)
         self.noise_lvl_trg = self.estimate_noise(trg_img)
         self.hist_trg = self.measure_histogram(trg_img)
+        self.contrast_lvl_trg = self.estimate_contrast(trg_img)
         
         
     def get_best_convertion_values(self):
@@ -335,24 +365,34 @@ class ImageConverter:
         
         blur_lvl = self.estimate_blur(self.out_img)
         noise_lvl = self.estimate_noise(self.out_img)
+        contrast_lvl = self.estimate_contrast(self.out_img)
                 
         blur_difference = abs(blur_lvl - self.blur_lvl_trg)
         noise_difference = abs(noise_lvl - self.noise_lvl_trg)
+        contrast_difference = abs(contrast_lvl - self.contrast_lvl_trg)
+
         
         # Normalize differences
         normalized_blur_difference = blur_difference / self.blur_lvl_trg if self.blur_lvl_trg != 0 else blur_difference
         normalized_noise_difference = noise_difference / self.noise_lvl_trg if self.noise_lvl_trg != 0 else noise_difference
-        
-        total_difference = normalized_blur_difference + normalized_noise_difference
-        
+        normalized_contrast_difference = contrast_difference / self.contrast_lvl_trg if self.contrast_lvl_trg != 0 else contrast_difference
+
+        # We prioritize the blur in error meassurment 
+        total_difference = (
+            2.0 * normalized_blur_difference +
+            1.0 * normalized_noise_difference +
+            1.0 * normalized_contrast_difference
+        )
+
         self.logger.info(
-            "Achieved Error: %.5f, blur: %s, noise: %.5f\n"
-            "Used Values: blur: %.2f (alpha: %.2f) | noise: %.2f (alpha: %.2f) |\n"
-            "Image Stats: blur: %.2f (target: %.2f) | noise: %.2f (target: %.2f)",
-            total_difference, blur_difference, noise_difference,
+            "Achieved Error: %.4f | blur: %.4f | noise: %.4f | contrast: %.4f\n"
+            "Used Values: blur: %d (alpha: %.2f), noise: %.2f (alpha: %.2f)\n"
+            "Image Stats: blur: %.2f (target: %.2f), noise: %.2f (target: %.2f), contrast: %.4f (target: %.4f)",
+            total_difference, blur_difference, noise_difference, contrast_difference,
             blur_kernel, blur_alpha, noise_std_dev, noise_alpha,
-            blur_lvl, self.blur_lvl_trg, noise_lvl, self.noise_lvl_trg)
- 
+            blur_lvl, self.blur_lvl_trg, noise_lvl, self.noise_lvl_trg, contrast_lvl, self.contrast_lvl_trg
+        )
+
         self.convertion_values[len(self.convertion_values) + 1] = {
             'total_difference' : total_difference,
             'blur_difference' : blur_difference,
@@ -394,7 +434,7 @@ class ImageConverter:
             Integer(1, 75, name = 'noise_std_dev'),
             Categorical([0.7, 0.5, 0.3], name = 'blur_alpha'),
             Categorical([0.7, 0.5, 0.3], name = 'noise_alpha'),
-            Real(1.0, 4.0, name = 'clip_limit'),
+            Real(1.0, 3.0, name = 'clip_limit'),
             Real(1, 20, name = 'blur_sigma'),
             Real(1.0, 2.5, name = 'unsharp_strength')]
         
