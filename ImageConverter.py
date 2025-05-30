@@ -370,8 +370,17 @@ class ImageConverter:
               
         return total_difference
     
-   
-    def find_convertion_values(self, epochs:int):
+
+    # gp minimize early stopper
+    def early_stop_callback(self, threshold):
+        def callback(res):
+            if res.fun < threshold:
+                return True  # This stops the optimization
+            return False
+        return callback
+
+    
+    def find_convertion_values(self, epochs:int, treshold:float):
         if self.blur_lvl_trg is None or self.noise_lvl_trg is None:
             print('Meassuring source image statistics first')
             self.meassure_src_img()
@@ -395,7 +404,8 @@ class ImageConverter:
                              random_state=40,
                              n_initial_points=10,
                              acq_func="EI",
-                             n_jobs=-1)
+                             n_jobs=-1, 
+                             callback=[self.early_stop_callback(threshold=treshold)])
 
         self.best_blur_lvl, self.best_noise_lvl, self.best_blur_alpha, \
         self.best_noise_alpha, self.clip_limit, self.blur_sigma, \

@@ -10,12 +10,10 @@ import os
 import requests
 import geopandas as gpd
 import pandas as pd
-import json
 import xml.etree.ElementTree as ET
 
 from io import BytesIO
 from shapely.geometry import Point, Polygon, LineString
-from shapely.affinity import rotate
 
 def download_wfs_polygons(url, layer_name):
     params = {
@@ -81,7 +79,7 @@ if __name__ == "__main__":
     url = 'https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WFS/Skorowidze'
     layer_name = 'gugik:SkorowidzOrtofomapy2024'
     db_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/Data.gpkg'
-    dst_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/01_InData/07_Orto_bw'
+    dst_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/01_InData/08_OrtoRGB'
     training_areas_gdf = gpd.read_file(db_dir, layer = 'obszaryTestowe_01')
     columns = ['gml_id', 'godlo', 'akt_rok', 'piksel', 'kolor', 'zrodlo_danych',
                'uklad_xy', 'modul_archiwizacji', 'nr_zglosz', 'akt_data', 
@@ -93,9 +91,11 @@ if __name__ == "__main__":
     not_overlapped_areas = training_areas_gdf
     
     # creating gdf with tiles to download
-    for orto_layer in ['gugik:SkorowidzOrtofomapy2003']: #wfs_layers[:5]:
+    for orto_layer in wfs_layers[:5]: #wfs_layers[:5]:
         orto_layer_gdf = download_wfs_polygons(url, orto_layer)
         orto_layer_gdf['geometry'] = orto_layer_gdf['geometry'].apply(flip_geom)
+        orto_layer_gdf = orto_layer_gdf[orto_layer_gdf['kolor'] == 'RGB']
+        orto_layer_gdf = orto_layer_gdf[orto_layer_gdf['piksel'] == 0.25] 
         print(f'pobrano: {orto_layer}')
         
         overlapping_tiles = orto_layer_gdf[
@@ -114,9 +114,8 @@ if __name__ == "__main__":
             break
    
     set(orto_gdf['piksel'].to_list())     
-    orto_gdf = orto_gdf[orto_gdf['kolor'] == 'B/W']
-    
-    orto_gdf.to_file(db_dir, layer='downloaded_orto_BW_00')
+   
+    orto_gdf.to_file(db_dir, layer='downloaded_orto_RGB_01')
     
     
     # downloading ortos 

@@ -47,7 +47,7 @@ if __name__ == "__main__":
         IC.noise_lvl_trg = trg_noise
         IC.blur_lvl_trg = trg_blur
         IC.hist_trg = trg_hist
-        IC.find_convertion_values(35)
+        IC.find_convertion_values(45, 0.8)
         IC.convert_image()
         conv_img, transform = IC.save(
             os.path.join(converted_rasters_dir, IC.img_nme.replace('.tif', '_conv.tif')))
@@ -63,7 +63,7 @@ if __name__ == "__main__":
         for index, patch in enumerate(patches):           
             patch_dir = os.path.join(patches_dir, IC.img_nme.replace('.tif', f'_{index}.jpg'))
             yolo_label_dir = os.path.join(yolo_labels_dir, IC.img_nme.replace('.tif', f'_{index}.txt'))
-            sam_label_dir = os.path.join(sam_label_dir, IC.img_nme.replace('.tif', f'_{index}.jpg'))
+            sam_label_dir = os.path.join(sam_labels_dir, IC.img_nme.replace('.tif', f'_{index}.jpg'))
             
             patch_extent = get_raster_extent(patch)
             bld_masks_gdf = gpd.clip(buildings_gdf, patch_extent)
@@ -95,13 +95,12 @@ if __name__ == "__main__":
                 f.write(yolo_txt)
                 
         print(f'Work on {IC.img_nme} completed')
-        break
     print('Process ENDED')
             
           
        
         
-        
+      
         
         
         
