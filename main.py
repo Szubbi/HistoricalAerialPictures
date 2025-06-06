@@ -25,8 +25,8 @@ if __name__ == "__main__":
     yolo_labels_dir = os.path.join(working_dir, '05_Data/03_YoloLabels')
     sam_labels_dir = os.path.join(working_dir, '05_Data/04_SamLabels')       
     hash_table = gpd.read_file(db_dir, layer = 'hash_table_01')
-    blur_sharp_table_BW = load_sqllite_dataframe(db_dir, 'img_BlurSharpTable_03')
-    blur_sharp_table_RGB = load_sqllite_dataframe(db_dir, 'img_BlurSharpRGBTable_03')
+    blur_sharp_table_BW = load_sqllite_dataframe(db_dir, 'img_BlurSharpTable_04')
+    blur_sharp_table_RGB = load_sqllite_dataframe(db_dir, 'img_BlurSharpRGBTable_05')
     rasters = [os.path.join(rasters_dir, _) for _ in os.listdir(rasters_dir)]
     log_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/Logger_files'
     PATCH_SIZE = 640
@@ -39,13 +39,14 @@ if __name__ == "__main__":
     target_values = generate_stratified_samples(blur_sharp_table_BW, len(rasters))
 
     # generate and save patches and labels
-    for raster, (trg_blur, trg_noise, trg_hist) in zip(rasters, target_values):
+    for raster, (trg_blur, trg_noise, trg_contrast, trg_hist) in zip(rasters, target_values):
         print(raster, trg_noise, trg_blur)
         
         # convert orto to simulate historical BW images
         IC = ImageConverter(raster, log_dir)
         IC.noise_lvl_trg = trg_noise
         IC.blur_lvl_trg = trg_blur
+        IC.contrast_lvl_trg = trg_contrast
         IC.hist_trg = trg_hist
         IC.find_convertion_values(45, 0.8)
         IC.convert_image()
@@ -95,6 +96,8 @@ if __name__ == "__main__":
                 f.write(yolo_txt)
                 
         print(f'Work on {IC.img_nme} completed')
+        
+    
     print('Process ENDED')
             
           

@@ -261,8 +261,8 @@ class ImageConverter:
         img = ImageConverter.load_img(None, img_dir)
         if len(img.shape) > 2:
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        I_max = np.max(img)
-        I_min = np.min(img)
+        I_max = np.max(img).astype(np.float32)
+        I_min = np.min(img).astype(np.float32)
         return (I_max - I_min) / (I_max + I_min + 1e-5)  # Avoid division by zero
 
     

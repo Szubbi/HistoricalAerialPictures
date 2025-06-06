@@ -305,9 +305,15 @@ def generate_stratified_samples(df, num_samples):
     blur_probs = np.ones_like(blur_values) / len(blur_values)
     blur_dist = rv_discrete(values=(blur_values, blur_probs))
     
+    # Create probability distribution for contrast
+    cst_values = list(set(df['contrast'].values))
+    cst_probs = np.ones_like(cst_values) / len(cst_values)
+    cst_dist = rv_discrete(values=(cst_values, cst_probs))
+    
     # Generate stratified samples
     noise_samples = noise_dist.rvs(size=num_samples)
     blur_samples = blur_dist.rvs(size=num_samples)
+    cst_samples = cst_dist.rvs(size=num_samples)
     
     # Find matching histograms
     selected_histograms = []
@@ -325,7 +331,7 @@ def generate_stratified_samples(df, num_samples):
             selected_histograms.append(match.sample(1)['histogram'].values[0])
     
     # Create list of tuples with stratified values
-    stratified_tuples = list(zip(blur_samples, noise_samples, selected_histograms))
+    stratified_tuples = list(zip(blur_samples, noise_samples, cst_samples, selected_histograms))
     
     return stratified_tuples
 
