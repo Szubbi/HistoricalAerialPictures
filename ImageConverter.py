@@ -120,79 +120,7 @@ class ImageConverter:
             raise TypeError('Input must be image array or image dir')
             
         return img
-        
     
-    # IMAGE CONVERTION FUNCTIONS    
-    def blur(self, kernel_size:int):
-        # Ensure kernel_size is odd and greater than 0
-        if kernel_size % 2 == 0:
-            kernel_size += 1
-        if kernel_size <= 0:
-            kernel_size = 1
-            
-        # Apply Gaussian Blur
-        blurred_image = cv2.GaussianBlur(self.out_img, (kernel_size, kernel_size), 0)
-        
-        # Apply bilateral filter for edge-preserving smoothing
-        blurred_image = cv2.bilateralFilter(blurred_image, kernel_size, 
-                                            kernel_size * 2, kernel_size / 2)
-        
-        # Ensure the image values are correctly scaled before converting to uint8
-        blurred_image = np.clip(blurred_image, 0, 255)
-        self.blurred_img = np.uint8(blurred_image)
-        
-        return self.blurred_img
-    
-    
-    def noise(self, sigma):
-        gaussian_noise = np.random.normal(0, sigma, self.out_img.shape).astype(np.float32)
-        noisy_image = cv2.add(self.out_img.astype(np.float32), gaussian_noise)
-        self.noise_img = np.clip(noisy_image, 0, 255).astype(np.uint8)        
-        return self.noise_img
-    
-    
-    # histogram adjustment
-    def compute_cdf(self, hist):
-        cdf = hist.cumsum()
-        return cdf / cdf[-1]  # Normalize to [0, 1]
-    
-    
-    def match_histogram(self):
-        source_cdf = self.compute_cdf(self.measure_histogram(self.out_img))
-        reference_cdf = self.compute_cdf(self.hist_trg)
-        
-        mapping = np.zeros(256, dtype=np.uint8)
-        for i in range(256):
-            closest_value = np.argmin(np.abs(reference_cdf - source_cdf[i]))
-            mapping[i] = closest_value
-            
-        self.out_img = mapping[self.out_img]
-    
-    
-    class BlendModes(Enum):
-        opt1 = 'blur'
-        opt2 = 'noise'
-        
-        
-    def blend_images(self, mode:BlendModes, alpha):
-        if not ImageConverter.BlendModes(mode):
-            raise ValueError(f'Mode value is not one of the {list(ImageConverter.BlendModes)}')      
-        
-        # Blend the original and blurred/noised images
-        if mode == 'blur':
-            blended_image = cv2.addWeighted(self.out_img, alpha, 
-                                            self.blurred_img, 1 - alpha, 0)
-        elif mode == 'noise':
-            blended_image = cv2.addWeighted(self.out_img, alpha, 
-                                            self.noise_img, 1 - alpha, 0)
-        else:
-            raise Exception('Modes DO NOT WORK')
-
-        # prevents overflow or underflow in pixel values after blending    
-        self.out_img = np.clip(blended_image, 0, 255).astype(np.uint8)
-
-        return blended_image
-        
     
     # IMAGE STATISTICS FUNCTIONS
     @staticmethod
@@ -266,6 +194,81 @@ class ImageConverter:
         return (I_max - I_min) / (I_max + I_min + 1e-5)  # Avoid division by zero
 
     
+    # IMAGE CONVERTION FUNCTIONS    
+    def blur(self, kernel_size:int):
+        # Ensure kernel_size is odd and greater than 0
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+        if kernel_size <= 0:
+            kernel_size = 1
+            
+        # Apply Gaussian Blur
+        blurred_image = cv2.GaussianBlur(self.out_img, (kernel_size, kernel_size), 0)
+        
+        # Apply bilateral filter for edge-preserving smoothing
+        blurred_image = cv2.bilateralFilter(blurred_image, kernel_size, 
+                                            kernel_size * 2, kernel_size / 2)
+        
+        # Ensure the image values are correctly scaled before converting to uint8
+        blurred_image = np.clip(blurred_image, 0, 255)
+        self.blurred_img = np.uint8(blurred_image)
+        
+        return self.blurred_img
+    
+    
+    def noise(self, sigma):
+        gaussian_noise = np.random.normal(0, sigma, self.out_img.shape).astype(np.float32)
+        noisy_image = cv2.add(self.out_img.astype(np.float32), gaussian_noise)
+        self.noise_img = np.clip(noisy_image, 0, 255).astype(np.uint8)        
+        return self.noise_img
+    
+    
+    # histogram adjustment
+    def compute_cdf(self, hist):
+        cdf = hist.cumsum()
+        return cdf / cdf[-1]  # Normalize to [0, 1]
+    
+    
+    def match_histogram(self):
+        source_cdf = self.compute_cdf(self.measure_histogram(self.out_img))
+        reference_cdf = self.compute_cdf(self.hist_trg)
+        
+        mapping = np.zeros(256, dtype=np.uint8)
+        for i in range(256):
+            closest_value = np.argmin(np.abs(reference_cdf - source_cdf[i]))
+            mapping[i] = closest_value
+            
+        self.out_img = mapping[self.out_img]
+    
+    
+    class BlendModes(Enum):
+        opt1 = 'blur'
+        opt2 = 'noise'
+        
+        
+    def blend_images(self, mode:BlendModes, alpha):
+        if not ImageConverter.BlendModes(mode):
+            raise ValueError(f'Mode value is not one of the {list(ImageConverter.BlendModes)}')      
+        
+        # Blend the original and blurred/noised images
+        if mode == 'blur':
+            blended_image = cv2.addWeighted(self.out_img, alpha, 
+                                            self.blurred_img, 1 - alpha, 0)
+        elif mode == 'noise':
+            blended_image = cv2.addWeighted(self.out_img, alpha, 
+                                            self.noise_img, 1 - alpha, 0)
+        else:
+            raise Exception('Modes DO NOT WORK')
+
+        # prevents overflow or underflow in pixel values after blending    
+        self.out_img = np.clip(blended_image, 0, 255).astype(np.uint8)
+
+        return blended_image
+    
+    def match_contrast(self, target_contrast):
+        current_contrast = self.estimate_contrast(self.out_img)
+        scale = self.contrast_lvl_trg / (current_contrast + 1e-5)
+        self.out_img = np.clip((self.out_img - 127.5) * scale + 127.5, 0, 255).astype(np.uint8)    
     
     # Below methoods are used together to reduce the foggy appearance in images 
     # by enhancing contrast and sharpness.
@@ -362,6 +365,7 @@ class ImageConverter:
         self.noise(noise_std_dev)
         self.blend_images('noise', noise_alpha)
         self.enhance_image(clip_limit, blur_sigma, unsharp_strength)
+        self.match_contrast()
         
         blur_lvl = self.estimate_blur(self.out_img)
         noise_lvl = self.estimate_noise(self.out_img)
