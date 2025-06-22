@@ -11,6 +11,9 @@ import numpy as np
 import xmltodict
 import sqlite3
 import pandas as pd
+import os
+
+from shutil import copy
 
 
 def read_annotations_xml(xml_dir:str) -> np.array:
@@ -39,3 +42,44 @@ def save_datarame_sqllite(df:pd.DataFrame, sql_dir:str, table_name:str):
     connection = sqlite3.connect(sql_dir)
     df.to_sql(table_name, connection)
     connection.close()
+    
+def count_rows_in_file(file_path):
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            return sum(1 for _ in file)
+    except FileNotFoundError:
+        print(f"File not found: {file_path}")
+        return None
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
+
+def is_file_valid(filepath):
+    try:
+        with open(filepath, 'r') as f:
+            f.read(1)  # Try reading a small part
+        return True
+    except (IOError, FileNotFoundError) as e:
+        print(f"Error with file '{filepath}': {e}")
+        return False
+    
+def move_patches(lables_src, imgs_src, dataset_dir, dataset, split):
+    images_dir = os.path.join(dataset_dir, 'images', split)
+    labels_dir = os.path.join(dataset_dir, 'labels', split)
+    
+    for i, patch in enumerate(dataset):
+        print(f"\rCopping {i} out of {len(dataset)}", end='', flush=True)
+        
+        img_nme = patch.replace('.txt', '.jpg')
+
+        img_src_dir = os.path.join(imgs_src, img_nme)
+        lbl_src_dir = os.path.join(lables_src, patch)
+
+        if is_file_valid(img_src_dir) and is_file_valid(lbl_src_dir):
+            if not os.path.isfile(os.path.join(labels_dir, patch)):
+                copy(os.path.join(lables_src, patch), labels_dir)
+            if not os.path.isfile(os.path.join(images_dir, img_nme)):
+                copy(os.path.join(imgs_src, img_nme), images_dir) 
+    
+    print('Done') 
