@@ -12,7 +12,7 @@ import shelve
 
 from ImageConverter import ImageConverter
 from GenerateTrainingSmple import *
-from util import load_sqllite_dataframe, count_rows_in_file, move_patches
+from util import *
 from rasterio.crs import CRS
 from DisplayAnnotations import *
 from sklearn.model_selection import train_test_split 
@@ -117,16 +117,7 @@ if __name__ == "__main__":
     in split to achive stratified samples 
     """
 
-    import shelve
-
-with shelve.open("my_cache_shelf") as cache:
-    if "my_list" in cache:
-        my_list = cache["my_list"]
-    else:
-        my_list = [x**2 for x in range(1000000)]
-        cache["my_list"] = my_list
-
-    
+      
     # Check if number of patches and labels is the same
     # Load from cache if available
     with shelve.open("my_cache_shelf") as cache:
@@ -145,6 +136,7 @@ with shelve.open("my_cache_shelf") as cache:
         if "cat" not in cache:
             print('Calculating categories')
             cat = [count_rows_in_file(os.path.join(yolo_labels_dir, _)) for _ in cache["patches"]]
+            cache["cat"] = cat
         else:
             cat = cache["cat"]
 
@@ -187,7 +179,7 @@ with shelve.open("my_cache_shelf") as cache:
             X_test = cache["X_test"]
             X_val = cache["X_val"]
 
-  
+
     print(f'Train dataset len: {len(X_train)}')
     print(f'Test dataset len: {len(X_test)}')
     print(f'Val dataset len: {len(X_val)}')    
@@ -203,6 +195,45 @@ with shelve.open("my_cache_shelf") as cache:
     
     for split, dataset in copy_dict.items():
         move_patches(yolo_labels_dir, patches_dir, DATASET_DIR, dataset, split)
+        
+        
+    # Check if the labels and images fits 
+    def check_imgs_labels(dataset_dir, split):
+        images_dir = os.path.join(dataset_dir, 'images', split)
+        labels_dir = os.path.join(dataset_dir, 'labels', split)
+        
+        imgs = [_.split('.')[0] for _ in os.listdir(images_dir)]
+        labels = [_.split('.')[0] for _ in os.listdir(labels_dir)]
+        
+        diff_imgs = list(set(imgs) - set(labels))
+        diff_labs = list(set(labels) - set(imgs))
+        
+        if len(diff_imgs) > 0 or len(diff_labs) > 0:
+            if len(diff_imgs) > 0:
+                print('Not every img has label: ')
+                for _ in diff_imgs:
+                    print(_)
+            if len(diff_labs) > 0:
+                print('Not every label has img: ')
+                for _ in diff_labs:
+                    print(_)
+        else:
+            print('All imgs has matching labels')
+            
+        
+    for split in ['train', 'test', 'val']:
+        check_imgs_labels(DATASET_DIR, split)
+
+    # labels needs replaceing commas with spaces
+    labels_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/02_YOLO_dataset/labels'
+    for root, dirs, files in os.walk(labels_dir):
+        files_num = len(files)
+        for i, file in enumerate(files):
+            file_dir = os.path.join(root, file)
+            replace_commas_with_spaces_in_file(file_dir)
+            print(f"\rUpdated {i} out of {files_num}", end='', flush=True)
+             
+
 
 
         

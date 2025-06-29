@@ -265,11 +265,21 @@ class ImageConverter:
 
         return blended_image
     
-    def match_contrast(self, target_contrast):
+    """
+    def match_contrast(self):
         current_contrast = self.estimate_contrast(self.out_img)
         scale = self.contrast_lvl_trg / (current_contrast + 1e-5)
-        self.out_img = np.clip((self.out_img - 127.5) * scale + 127.5, 0, 255).astype(np.uint8)    
-    
+        scale = np.clip(scale, 0.5, 1.5)  # Prevent extreme scaling
+        adjusted = (self.out_img - 127.5) * scale + 127.5
+        self.out_img = np.clip(adjusted, 0, 255).astype(np.uint8)
+        
+    """
+    def match_contrast(self):
+        inv_gamma = 1.0 / 1.2
+        table = np.array([(i / 255.0) ** inv_gamma * 255 for i in range(256)]).astype("uint8")
+        self.out_img = cv2.LUT(self.out_img, table)
+
+  
     # Below methoods are used together to reduce the foggy appearance in images 
     # by enhancing contrast and sharpness.
     # Based on https://www.ijeat.org/wp-content/uploads/papers/v9i2/A9607109119.pdf
@@ -384,7 +394,7 @@ class ImageConverter:
         # We prioritize the blur in error meassurment 
         total_difference = (
             2.0 * normalized_blur_difference +
-            1.0 * normalized_noise_difference +
+            1.1 * normalized_noise_difference +
             1.0 * normalized_contrast_difference
         )
 

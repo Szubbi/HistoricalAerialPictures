@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Jun 19 09:28:31 2025
+
+@author: piotr.szubert@doctoral.uj.edu.pl
+
+"""
+
+
+import torch
+import onnx
+import numpy as np
+
+from ultralytics import YOLO
+from onnx import helper, numpy_helper, TensorProto
+
+
+def keep_segmentation_output_and_slice_channel(model_path: str, output_path: str = "best_segmentation_only.onnx") -> str:
+    """
+    Loads an ONNX model, retains only the segmentation-related output, slices it to keep only the first channel,
+    and saves the modified model.
+
+    Parameters:
+        model_path (str): Path to the original ONNX model.
+        output_path (str): Path to save the modified ONNX model.
+
+    Returns:
+        str: Path to the saved ONNX model with only the first segmentation channel.
+    """
+    model = onnx.load(model_path)
+
+    print("Original model outputs:")
+    for output in model.graph.output:
+        print(f"- {output.name}")
+
+    segmentation_outputs = []
+
+    for output in model.graph.output:
+        if "proto" in output.name.lower() or "mask" in output.name.lower():
+            segmentation_outputs.append(output)
+
+    if not segmentation_outputs:
+        for output in model.graph.output:
+            shape_dims = [dim.dim_value for dim in output.type.tensor_type.shape.dim]
+            if len(shape_dims) == 4 and shape_dims[1] in (32, 64) and shape_dims[2] > 100:
+                segmentation_outputs.append(output)
+
+    if not segmentation_outputs and len(model.graph.output) > 1:
+        segmentation_outputs = [model.graph.output[1]]
+
+    selected_output = segmentation_outputs[0]
+    original_output_name = selected_output.name
+
+    # Create a Slice node to extract the first channel
+    slice_output_name = original_output_name + "_sliced"
+
+    starts_initializer = numpy_helper.from_array(np.array([0, 0, 0, 0], dtype=np.int64), name="slice_starts")
+    ends_initializer = numpy_helper.from_array(np.array([1, 1, 1 << 30, 1 << 30], dtype=np.int64), name="slice_ends")
+    axes_initializer = numpy_helper.from_array(np.array([0, 1, 2, 3], dtype=np.int64), name="slice_axes")
+
+    model.graph.initializer.extend([starts_initializer, ends_initializer, axes_initializer])
+
+    slice_node = helper.make_node(
+        "Slice",
+        inputs=[original_output_name, "slice_starts", "slice_ends", "slice_axes"],
+        outputs=[slice_output_name],
+        name="SliceFirstChannel"
+    )
+
+    model.graph.node.append(slice_node)
+
+    # Clear and redefine the model output
+    model.graph.ClearField("output")
+    output_tensor = helper.make_tensor_value_info(slice_output_name, TensorProto.FLOAT, [1, 1, None, None])
+    model.graph.output.extend([output_tensor])
+
+    onnx.save(model, output_path)
+
+    print(f"\nModified ONNX model saved as '{output_path}' with output: {slice_output_name}")
+    return output_path
+
+
+
+if __name__ == '__main__':
+
+    # Check if CUDA (GPU) is available
+    if torch.cuda.is_available():
+        print("GPU is available for training.")
+        print(f"Using device: {torch.cuda.get_device_name(0)}")
+    else:
+        print("❌ GPU is not available. Training will use CPU.")
+
+
+
+    # Load a YOLO model
+    model = YOLO('/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/yolo11n-seg.pt')
+    model.model.args['in_chanels'] = 1 #we have one band images
+    
+
+    # Train the model
+    model.train(
+        data='YOLO_Dataset.yaml',         # Path to dataset YAML
+        imgsz=640,                # Image size
+        epochs=25,               # Max epochs
+        patience=10,              # Early stopping patience
+        batch=32,                 # Batch size
+        lr0=0.005,                 # Initial learning rate
+        lrf=0.01,                 # Final learning rate fraction
+        warmup_epochs=5,
+        optimizer='SGD',          # Optimizer (SGD or Adam)
+        cos_lr=True,              # Use cosine learning rate scheduler
+        amp=True,                 # Mixed precision training
+        cache=True,               # Cache images for faster training
+        save=True,                # Save checkpoints
+        save_period=5,            # Save every 5 epochs
+        project='runs/train',     # Output directory
+        name='yolo-25e-005-01' # Run name
+    )
+
+
+    model.export(format='onnx')
+    

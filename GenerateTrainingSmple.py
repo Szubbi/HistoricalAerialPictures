@@ -18,7 +18,7 @@ import numpy as np
 import cv2
 
 
-from shapely.geometry import box
+from shapely.geometry import box, Polygon, MultiPolygon
 from rasterio.features import rasterize
 from rasterio.windows import Window
 from enum import Enum
@@ -100,10 +100,10 @@ def get_geometries(src_db_dir:str, layers:list, raster_path:str) -> gpd.GeoDataF
         - src_db_dir - path to the database with 
         - layers - layers to get from db
     """
-    gdf = gpd.GeoDataFrame(columns = ['file_name', 'geometry'])
+    gdf = gpd.GeoDataFrame(columns = ['file_name', 'geometry'], crs='ETRS_1989_Poland_CS92')
     
     for layer in layers:
-        layer_gdf = gpd.read_file(src_db_dir, layer=layer)
+        layer_gdf = gpd.read_file(src_db_dir, layer=layer).to_crs('ETRS_1989_Poland_CS92')
         gdf = pd.concat([gdf, layer_gdf])
         
     gdf = gpd.clip(gdf, get_raster_extent(raster_path))
@@ -176,18 +176,23 @@ def generate_yolo_labels(size, rasterio_transform, buildings_gdf):
         polygon = row.geometry
 
         # Convert world coordinates to pixel coordinates
-        pixel_coords = [
-            rasterio.transform.rowcol(rasterio_transform, x, y)[::-1]  # (col, row)
-            for x, y in polygon.exterior.coords
-        ]
-
-        # Normalize coordinates
-        normalized_coords = [
-            f"{x / size:.6f},{y / size:.6f}" for x, y in pixel_coords
-        ]
-
-        # Format as YOLO label (assuming class 0 for buildings)
-        label_text += "0 " + " ".join(normalized_coords) + "\n"
+        # Proceed only if coordinates are valid polygon
+        try:
+            pixel_coords = [
+                rasterio.transform.rowcol(rasterio_transform, x, y)[::-1]  # (col, row)
+                for x, y in polygon.exterior.coords
+            ]
+    
+            # Normalize coordinates
+            normalized_coords = [
+                f"{x / size:.6f},{y / size:.6f}" for x, y in pixel_coords
+            ]
+    
+            # Format as YOLO label (assuming class 0 for buildings)
+            label_text += "0 " + " ".join(normalized_coords) + "\n"
+        except:
+            pass
+        
 
     return label_text
 

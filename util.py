@@ -57,8 +57,9 @@ def count_rows_in_file(file_path):
 
 def is_file_valid(filepath):
     try:
-        with open(filepath, 'r') as f:
-            f.read(1)  # Try reading a small part
+        with open(filepath, 'rb') as f:
+            while f.read(1024*1024):  # Try reading a small part
+                pass
         return True
     except (IOError, FileNotFoundError) as e:
         print(f"Error with file '{filepath}': {e}")
@@ -83,3 +84,26 @@ def move_patches(lables_src, imgs_src, dataset_dir, dataset, split):
                 copy(os.path.join(imgs_src, img_nme), images_dir) 
     
     print('Done') 
+    
+    
+def replace_commas_with_spaces_in_file(file_path):
+    try:
+        # Try reading the file with UTF-8 encoding
+        with open(file_path, 'r', encoding='utf-8') as file:
+            content = file.read()
+    except UnicodeDecodeError:
+        # Fallback to Latin-1 encoding if UTF-8 fails
+        with open(file_path, 'r', encoding='latin-1') as file:
+            content = file.read()
+
+    # Replace commas with spaces
+    updated_content = content.replace(',', ' ')
+
+    # Overwrite the file with updated content using the same encoding used for reading
+    try:
+        with open(file_path, 'w', encoding='utf-8') as file:
+            file.write(updated_content)
+    except UnicodeEncodeError:
+        with open(file_path, 'w', encoding='latin-1') as file:
+            file.write(updated_content)
+
