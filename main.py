@@ -275,6 +275,15 @@ if __name__ == "__main__":
             overlaping_layers = get_layers_extent(img, hash_table)
             buildings_gdf = get_geometries(buildings_db_dir, overlaping_layers['file_name'].to_list(), img)
 
+            patch_dst_dir = os.path.join(dst_dir)
+            yolo_label_dst_dir = os.path.join(dst_dir.replace('images', 'labels_yolo'))
+            sam_label_dst_dir = os.path.join(dst_dir.replace('images', 'labels'))
+
+            # create folders if required
+            for dir in [patch_dst_dir, yolo_label_dst_dir, sam_label_dst_dir]:
+                if not os.path.exists(dir):
+                    os.makedirs(dir)
+
             for index, patch in enumerate(patches):           
                 patch_dir = os.path.join(dst_dir, f'{img}_{index}.png')
                 yolo_label_dir = os.path.join(dst_dir.replace('images', 'labels_yolo'), f'{img}_{index}.txt')
