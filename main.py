@@ -120,120 +120,202 @@ if __name__ == "__main__":
       
     # Check if number of patches and labels is the same
     # Load from cache if available
-    with shelve.open("my_cache_shelf") as cache:
-        if "patches" not in cache:
-            patches = [_ for _ in os.listdir(yolo_labels_dir)]
-            cache["patches"] = patches
-        else: 
-            patches = cache["patches"]
+    # with shelve.open("my_cache_shelf") as cache:
+    #     if "patches" not in cache:
+    #         patches = [_ for _ in os.listdir(yolo_labels_dir)]
+    #         cache["patches"] = patches
+    #     else: 
+    #         patches = cache["patches"]
 
-        if "imgs" not in cache:
-            imgs = [_ for _ in os.listdir(patches_dir) if _.endswith('.jpg')]
-            cache["imgs"] = imgs
-        else:
-            imgs = cache["imgs"]
+    #     if "imgs" not in cache:
+    #         imgs = [_ for _ in os.listdir(patches_dir) if _.endswith('.jpg')]
+    #         cache["imgs"] = imgs
+    #     else:
+    #         imgs = cache["imgs"]
 
-        if "cat" not in cache:
-            print('Calculating categories')
-            cat = [count_rows_in_file(os.path.join(yolo_labels_dir, _)) for _ in cache["patches"]]
-            cache["cat"] = cat
-        else:
-            cat = cache["cat"]
+    #     if "cat" not in cache:
+    #         print('Calculating categories')
+    #         cat = [count_rows_in_file(os.path.join(yolo_labels_dir, _)) for _ in cache["patches"]]
+    #         cache["cat"] = cat
+    #     else:
+    #         cat = cache["cat"]
 
-    assert len(imgs) == len(patches), 'Number of patches and labels is different!'
+    # assert len(imgs) == len(patches), 'Number of patches and labels is different!'
     
-    # Using number of buildings as classes fro stratified sample split 
-    with shelve.open("my_cache_shelf") as cache:
-        if "classes" not in cache:
-            print('Classifying')
+    # # Using number of buildings as classes fro stratified sample split 
+    # with shelve.open("my_cache_shelf") as cache:
+    #     if "classes" not in cache:
+    #         print('Classifying')
 
-            classifier = KBinsDiscretizer(
-                n_bins=6, encode='ordinal', strategy='kmeans')
-            classifier.fit(np.array(cat).reshape(-1,1))
+    #         classifier = KBinsDiscretizer(
+    #             n_bins=6, encode='ordinal', strategy='kmeans')
+    #         classifier.fit(np.array(cat).reshape(-1,1))
             
-            bins = classifier.bin_edges_[0].tolist()
-            print(bins)
-            classes = classifier.transform(np.array(cat).reshape(-1,1)).reshape(-1)
+    #         bins = classifier.bin_edges_[0].tolist()
+    #         print(bins)
+    #         classes = classifier.transform(np.array(cat).reshape(-1,1)).reshape(-1)
 
-            cache["classes"] = classes
-            cache["bins"] = bins
+    #         cache["classes"] = classes
+    #         cache["bins"] = bins
         
-        else:
-            classes = cache["classes"]
-            bins = cache["bins"]
+    #     else:
+    #         classes = cache["classes"]
+    #         bins = cache["bins"]
 
-        if "X_train" not in cache and "X_val" not in cache:
-            print('Splitting into test/val/test') 
+    #     if "X_train" not in cache and "X_val" not in cache:
+    #         print('Splitting into test/val/test') 
 
-            X_train, X_other, y_train, y_other = train_test_split(
-                patches, classes, stratify=classes, test_size=0.3)            
-            X_test, X_val, y_test, y_val = train_test_split(
-                X_other, y_other, stratify=y_other, test_size=0.3)
+    #         X_train, X_other, y_train, y_other = train_test_split(
+    #             patches, classes, stratify=classes, test_size=0.3)            
+    #         X_test, X_val, y_test, y_val = train_test_split(
+    #             X_other, y_other, stratify=y_other, test_size=0.3)
             
-            cache["X_train"] = X_train
-            cache["X_test"] = X_test
-            cache["X_val"] = X_val
+    #         cache["X_train"] = X_train
+    #         cache["X_test"] = X_test
+    #         cache["X_val"] = X_val
 
-        else:
-            X_train = cache["X_train"]
-            X_test = cache["X_test"]
-            X_val = cache["X_val"]
+    #     else:
+    #         X_train = cache["X_train"]
+    #         X_test = cache["X_test"]
+    #         X_val = cache["X_val"]
 
 
-    print(f'Train dataset len: {len(X_train)}')
-    print(f'Test dataset len: {len(X_test)}')
-    print(f'Val dataset len: {len(X_val)}')    
+    # print(f'Train dataset len: {len(X_train)}')
+    # print(f'Test dataset len: {len(X_test)}')
+    # print(f'Val dataset len: {len(X_val)}')    
     
-    # Move files to destination                
-    DATASET_DIR = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/02_YOLO_dataset'
+    # # Move files to destination                
+    # DATASET_DIR = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/02_YOLO_dataset'
     
-    copy_dict = {
-        'train': X_train,
-        'test': X_test,
-        'val': X_val
-    }
+    # copy_dict = {
+    #     'train': X_train,
+    #     'test': X_test,
+    #     'val': X_val
+    # }
     
-    for split, dataset in copy_dict.items():
-        move_patches(yolo_labels_dir, patches_dir, DATASET_DIR, dataset, split)
+    # for split, dataset in copy_dict.items():
+    #     move_patches(yolo_labels_dir, patches_dir, DATASET_DIR, dataset, split)
         
         
-    # Check if the labels and images fits 
-    def check_imgs_labels(dataset_dir, split):
-        images_dir = os.path.join(dataset_dir, 'images', split)
-        labels_dir = os.path.join(dataset_dir, 'labels', split)
+    # # Check if the labels and images fits 
+    # def check_imgs_labels(dataset_dir, split):
+    #     images_dir = os.path.join(dataset_dir, 'images', split)
+    #     labels_dir = os.path.join(dataset_dir, 'labels', split)
         
-        imgs = [_.split('.')[0] for _ in os.listdir(images_dir)]
-        labels = [_.split('.')[0] for _ in os.listdir(labels_dir)]
+    #     imgs = [_.split('.')[0] for _ in os.listdir(images_dir)]
+    #     labels = [_.split('.')[0] for _ in os.listdir(labels_dir)]
         
-        diff_imgs = list(set(imgs) - set(labels))
-        diff_labs = list(set(labels) - set(imgs))
+    #     diff_imgs = list(set(imgs) - set(labels))
+    #     diff_labs = list(set(labels) - set(imgs))
         
-        if len(diff_imgs) > 0 or len(diff_labs) > 0:
-            if len(diff_imgs) > 0:
-                print('Not every img has label: ')
-                for _ in diff_imgs:
-                    print(_)
-            if len(diff_labs) > 0:
-                print('Not every label has img: ')
-                for _ in diff_labs:
-                    print(_)
-        else:
-            print('All imgs has matching labels')
+    #     if len(diff_imgs) > 0 or len(diff_labs) > 0:
+    #         if len(diff_imgs) > 0:
+    #             print('Not every img has label: ')
+    #             for _ in diff_imgs:
+    #                 print(_)
+    #         if len(diff_labs) > 0:
+    #             print('Not every label has img: ')
+    #             for _ in diff_labs:
+    #                 print(_)
+    #     else:
+    #         print('All imgs has matching labels')
             
         
-    for split in ['train', 'test', 'val']:
-        check_imgs_labels(DATASET_DIR, split)
+    # for split in ['train', 'test', 'val']:
+    #     check_imgs_labels(DATASET_DIR, split)
 
-    # labels needs replaceing commas with spaces
-    labels_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/02_YOLO_dataset/labels'
-    for root, dirs, files in os.walk(labels_dir):
-        files_num = len(files)
-        for i, file in enumerate(files):
-            file_dir = os.path.join(root, file)
-            replace_commas_with_spaces_in_file(file_dir)
-            print(f"\rUpdated {i} out of {files_num}", end='', flush=True)
+    # # labels needs replaceing commas with spaces
+    # labels_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/02_YOLO_dataset/labels'
+    # for root, dirs, files in os.walk(labels_dir):
+    #     files_num = len(files)
+    #     for i, file in enumerate(files):
+    #         file_dir = os.path.join(root, file)
+    #         replace_commas_with_spaces_in_file(file_dir)
+    #         print(f"\rUpdated {i} out of {files_num}", end='', flush=True)
              
 
+    # create PNG labels 
+
+    # retrive split from folders
+    dataset_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/02_YOLO_dataset'
+    split_imgs_dict = {}
+    split_dirs_dict = {
+        'train' : os.path.join(dataset_dir, 'images', 'train'),
+        'test' : os.path.join(dataset_dir, 'images', 'test'),
+        'val' : os.path.join(dataset_dir, 'images', 'val')
+    }
+    
+    for split, path in split_dirs_dict.items():
+        imgs = [_ for _ in os.listdir(path) if _.endswith('.jpg')]
+        imgs = ['_'.join(_.split('_')[:-1]) for _ in imgs]
+        imgs = list(set(imgs))
+        split_imgs_dict[split] = imgs
+
+    org_imgs = len([_ for _ in os.listdir(converted_rasters_dir) if _.endswith('.tif')])
+    imgs_split = [item for sublist in split_imgs_dict.values() for item in sublist]
+    diff = list(set(org_imgs) - set(imgs_split)) + list(set(imgs_split) - set(org_imgs))
+
+    assert diff == 0, 'number of images in training patches do not match!'
+
+    # save patches as PNGs
+    dataset_dst_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/03_DeepLab_dataset'
+    split_dst_dirs_dict = {
+        'train' : os.path.join(dataset_dst_dir, 'images', 'train'),
+        'test' : os.path.join(dataset_dst_dir, 'images', 'test'),
+        'val' : os.path.join(dataset_dst_dir, 'images', 'val')
+    }
+
+    for split, dst_dir in split_dst_dirs_dict.items():
+        imgs = split_imgs_dict[split]
+        for idx, img in enumerate(imgs):
+            img_dir = os.path.join(converted_rasters_dir, img + '.tif')
+            print(f'\rGenerating Patches for: {img}: {idx}/{len(imgs)}', end='', flush=True)
+            patches = split_geotiff_to_patches(img_dir, PATCH_SIZE, 0.25)
+            print(f'\rGetting Buildings for: {img}: {idx}/{len(imgs)}', end='', flush=True)
+            overlaping_layers = get_layers_extent(img, hash_table)
+            buildings_gdf = get_geometries(buildings_db_dir, overlaping_layers['file_name'].to_list(), img)
+
+            for index, patch in enumerate(patches):           
+                patch_dir = os.path.join(dst_dir, f'{img}_{index}.png')
+                yolo_label_dir = os.path.join(dst_dir.replace('images', 'labels_yolo'), f'{img}_{index}.txt')
+                sam_label_dir = os.path.join(dst_dir.replace('images', 'labels'), f'{img}_{index}.png')
+
+                # create folders if required
+                for dir in [patch_dir, yolo_label_dir, sam_label_dir]:
+                    if not os.path.exists(dir):
+                        os.makedirs(dir)
+                
+                patch_extent = get_raster_extent(patch)
+                bld_masks_gdf = gpd.clip(buildings_gdf, patch_extent)
+                # removing multipart polygons
+                bld_masks_gdf = bld_masks_gdf.explode(index_parts=False).reset_index(drop=True)
+                
+                # save patch 
+                raster_meta = {'driver': 'PNG',
+                            'dtype': 'uint8', 
+                            'nodata': None,
+                            'height': patch[0].shape[0], 
+                            'width': patch[0].shape[1], 
+                            'count': 1, 
+                            'crs': CRS.from_epsg(2180), 
+                            'transform': patch[1]}
+                
+                with rasterio.open(patch_dir, 'w', **raster_meta) as dst:
+                    dst.write(patch[0], 1)
+                    
+                # generate rasterized masks
+                binary_mask = rasterize_geometries(src_geom_gdf = bld_masks_gdf, 
+                                            raster_path = patch_dir,
+                                            mode = 'Binary', 
+                                            out_path = sam_label_dir) 
+                
+                # generate YOLO Txt labels
+                yolo_txt = generate_yolo_labels(PATCH_SIZE, patch[1], bld_masks_gdf)
+                yolo_txt = yolo_txt if yolo_txt is not None else ""
+                with open(yolo_label_dir, 'w') as f:
+                    f.write(yolo_txt)
+
+    print('\nProcess completed')
 
 
         
