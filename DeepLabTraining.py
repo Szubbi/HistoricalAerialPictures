@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import os
+import tf2onnx
 
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from DeepLabModel import DeeplabV3Plus
@@ -108,3 +109,9 @@ if __name__ == "__main__":
         epochs=50,
         callbacks=[early_stop, lr_decay]
     )
+
+
+    spec = (tf.TensorSpec((None, IMAGE_SIZE, IMAGE_SIZE, 1), tf.float32, name="input"),)
+    onnx_model, _ = tf2onnx.convert.from_keras(model, input_signature=spec, opset=13)
+    with open("deeplab_model.onnx", "wb") as f:
+        f.write(onnx_model.SerializeToString())
