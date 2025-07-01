@@ -70,9 +70,9 @@ if __name__ == "__main__":
     #         patches = split_geotiff_to_patches((conv_img, transform), PATCH_SIZE, 0.25)
             
     #         for index, patch in enumerate(patches):           
-    #             patch_dir = os.path.join(patches_dir, IC.img_nme.replace('.tif', f'_{index}.jpg'))
+    #             patch_dir = os.path.join(patches_dir, IC.img_nme.replace('.tif', f'_{index}.png'))
     #             yolo_label_dir = os.path.join(yolo_labels_dir, IC.img_nme.replace('.tif', f'_{index}.txt'))
-    #             sam_label_dir = os.path.join(sam_labels_dir, IC.img_nme.replace('.tif', f'_{index}.jpg'))
+    #             sam_label_dir = os.path.join(sam_labels_dir, IC.img_nme.replace('.tif', f'_{index}.png'))
                 
     #             patch_extent = get_raster_extent(patch)
     #             bld_masks_gdf = gpd.clip(buildings_gdf, patch_extent)
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     #             bld_masks_gdf = bld_masks_gdf.explode(index_parts=False).reset_index(drop=True)
                 
     #             # save patch 
-    #             raster_meta = {'driver': 'JPEG',
+    #             raster_meta = {'driver': 'PNG',
     #                         'dtype': 'uint8', 
     #                         'nodata': None,
     #                         'height': patch[0].shape[0], 

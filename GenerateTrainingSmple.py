@@ -150,7 +150,7 @@ def rasterize_geometries(src_geom_gdf:gpd.GeoDataFrame, raster_path:str,
         
     
     if out_path:
-        with rasterio.open(out_path, 'w', driver='JPEG', height=raster.shape[0],
+        with rasterio.open(out_path, 'w', driver='PNG', height=raster.shape[0],
                            width=raster.shape[1], count=1, dtype=raster.dtype,
                            crs=src_geom_gdf.crs, transform=transform) as dst:
             dst.write(raster, 1)
