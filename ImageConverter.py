@@ -100,7 +100,7 @@ class ImageConverter:
         # Logging
         self.logger = setup_logger(name = f'ImageConverter_{self.img_nme}_logger',
                                    log_file = os.path.join(log_dir,
-                                                           f'ImageConverter_{self.img_nme}_logger_{datetime.now()}.log'))
+                                                           f'ImageConverter_{self.img_nme.replace(".","")}_logger_{datetime.now().strftime("%m%d%Y%H%M%S")}.log'))
         
         
     def __str__(self):
