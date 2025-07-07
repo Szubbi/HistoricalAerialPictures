@@ -416,6 +416,30 @@ def compare_convertion_side_by_side(img1, img2):
     # Show the plot
     plt.show()
 
+
+    # Check if the labels and images fits 
+def check_imgs_labels(dataset_dir, split):
+    images_dir = os.path.join(dataset_dir, 'images', split)
+    labels_dir = os.path.join(dataset_dir, 'labels', split)
+    
+    imgs = [_.split('.')[0] for _ in os.listdir(images_dir)]
+    labels = [_.split('.')[0] for _ in os.listdir(labels_dir)]
+    
+    diff_imgs = list(set(imgs) - set(labels))
+    diff_labs = list(set(labels) - set(imgs))
+    
+    if len(diff_imgs) > 0 or len(diff_labs) > 0:
+        if len(diff_imgs) > 0:
+            print('Not every img has label: ')
+            for _ in diff_imgs:
+                print(_)
+        if len(diff_labs) > 0:
+            print('Not every label has img: ')
+            for _ in diff_labs:
+                print(_)
+    else:
+        print('All imgs has matching labels')
+
        
 if __name__ == "__main__":
     pass
