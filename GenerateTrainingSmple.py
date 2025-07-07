@@ -185,7 +185,7 @@ def generate_yolo_labels(size, rasterio_transform, buildings_gdf):
     
             # Normalize coordinates
             normalized_coords = [
-                f"{x / size:.6f},{y / size:.6f}" for x, y in pixel_coords
+                f"{x / size:.6f} {y / size:.6f}" for x, y in pixel_coords
             ]
     
             # Format as YOLO label (assuming class 0 for buildings)
