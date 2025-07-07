@@ -135,6 +135,12 @@ if __name__ == "__main__":
             yolo_label_dir = os.path.join(yolo_dir, raster.replace('.tif', f'_{index}.txt'))
             sam_label_dir = os.path.join(labels_dir, raster.replace('.tif', f'_{index}.png'))
 
+            # make sure directories exists
+            for dir in [patch_dir, yolo_label_dir, sam_label_dir]:
+                if not os.path.exists(dir):
+                    os.makedirs(dir)
+                
+
             patch_extent = get_raster_extent(patch)
             bld_masks_gdf = gpd.clip(buildings_gdf, patch_extent)
             # removing multipart polygons
