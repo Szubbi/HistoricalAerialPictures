@@ -120,6 +120,11 @@ if __name__ == "__main__":
     labels_dir = os.path.join(dataset_dir, 'labels')
     yolo_dir = os.path.join(dataset_dir, 'yolo_labels')
 
+    # make sure directories exists
+    for dir in [patches_dir, labels_dir, yolo_dir]:
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+
     for idx, raster in enumerate(conv_rasters):
         print(f'\rWorking on: {raster}: {idx}/{len(conv_rasters)}', end='', flush=True)
 
@@ -134,13 +139,7 @@ if __name__ == "__main__":
             patch_dir = os.path.join(patches_dir, raster.replace('.tif', f'_{index}.png'))
             yolo_label_dir = os.path.join(yolo_dir, raster.replace('.tif', f'_{index}.txt'))
             sam_label_dir = os.path.join(labels_dir, raster.replace('.tif', f'_{index}.png'))
-
-            # make sure directories exists
-            for dir in [patch_dir, yolo_label_dir, sam_label_dir]:
-                if not os.path.exists(dir):
-                    os.makedirs(dir)
-                
-
+              
             patch_extent = get_raster_extent(patch)
             bld_masks_gdf = gpd.clip(buildings_gdf, patch_extent)
             # removing multipart polygons
