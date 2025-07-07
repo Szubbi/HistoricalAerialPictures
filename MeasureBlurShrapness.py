@@ -14,10 +14,10 @@ from util import save_datarame_sqllite, load_sqllite_dataframe
 from GenerateTrainingSmple import display_histograms
 
 if __name__ == "__main__":
-    rasters_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/01_InData/07_Orto_bw'
-    db_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/Data.gpkg'
+    rasters_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/01_InData/07_Orto_bw'
+    db_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/Data.gpkg'
     rasters_list = [os.path.join(rasters_dir, _) for _ in os.listdir(rasters_dir) if _.endswith('.tif')]
-    log_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/Logger_files'
+    log_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/Logger_files'
     
     results = pd.DataFrame(columns=['name', 'blur', 'noise', 'contrast', 'histogram'])
     

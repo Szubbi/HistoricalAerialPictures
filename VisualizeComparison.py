@@ -10,6 +10,7 @@ import os
 import matplotlib.pyplot as plt
 
 from ImageConverter import ImageConverter
+from util import load_sqllite_dataframe
 
 def visualize_comparison(rgb_image, bw_image1, bw_image2, bw_image3):
     fig, axes = plt.subplots(2, 2, figsize=(14, 14))
@@ -32,6 +33,41 @@ def visualize_comparison(rgb_image, bw_image1, bw_image2, bw_image3):
 
     plt.tight_layout()
     plt.show()
+
+
+def plot_image_metrics_histograms(contrast_data, blur_data, noise_data,
+                                  metric_names, collection_names):
+    """
+    Plots a 3x3 grid of histograms using matplotlib.
+    Each column represents an image collection.
+    Each row represents a metric: contrast, blur, and sharpness.
+
+    Parameters:
+    - contrast_data: List of 3 lists, each containing contrast values for an image collection.
+    - blur_data: List of 3 lists, each containing blur values for an image collection.
+    - sharpness_data: List of 3 lists, each containing sharpness values for an image collection.
+    """
+    fig, axes = plt.subplots(3, 3, figsize=(15, 10))
+    metric_data = [contrast_data, blur_data, noise_data]
+
+    # Compute x-axis limits for each metric row
+    x_limits = []
+    for metric in metric_data:
+        all_values = [value for collection in metric for value in collection]
+        x_limits.append((min(all_values), max(all_values)))
+
+    for row in range(3):
+        for col in range(3):
+            axes[row, col].hist(metric_data[row][col], bins=20, color='skyblue', edgecolor='black')
+            axes[row, col].set_xlim(x_limits[row])  # Set consistent x-axis range per row
+            if row == 0:
+                axes[row, col].set_title(collection_names[col])
+            if col == 0:
+                axes[row, col].set_ylabel(metric_names[row])
+    
+    plt.tight_layout()
+    plt.show()
+
 
 
 if __name__ == "__main__":
@@ -59,5 +95,21 @@ if __name__ == "__main__":
     
     
     visualize_comparison(trg_img.src_img, src_img(), trg_img(), trg_img())
+    
+    
+    # histograms comparison
+    db_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/Data.gpkg'
+    
+    BW_df = load_sqllite_dataframe(db_dir, 'img_BlurSharpTable_04')
+    RGB_df = load_sqllite_dataframe(db_dir, 'img_BlurSharpRGBTable_05')
+    Conv_df = load_sqllite_dataframe(db_dir, 'img_BlurSharpConvTable_04')
+    
+    plot_image_metrics_histograms(
+        contrast_data= [BW_df['contrast'], RGB_df['contrast'], Conv_df['contrast']],
+        blur_data=[BW_df['blur'], RGB_df['blur'], Conv_df['blur']],
+        noise_data=[BW_df['noise'], RGB_df['noise'], Conv_df['noise']],
+        metric_names = ['Contrast', 'Blur', 'Noise'],
+        collection_names = ['Historical BW Imagery', 'Modern RGB Imagery', 'Simulated BW Imagery']
+        )
 
     
