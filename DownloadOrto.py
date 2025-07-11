@@ -78,23 +78,23 @@ def download_img(src_url, dst_dir):
 if __name__ == "__main__":
     url = 'https://mapy.geoportal.gov.pl/wss/service/PZGIK/ORTO/WFS/Skorowidze'
     layer_name = 'gugik:SkorowidzOrtofomapy2024'
-    db_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/Data.gpkg'
-    dst_dir = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/01_InData/08_OrtoRGB'
-    training_areas_gdf = gpd.read_file(db_dir, layer = 'obszaryTestowe_01')
+    db_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/Data.gpkg'
+    dst_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/01_InData/12_testOrtoBW'
+    training_areas_gdf = gpd.read_file(db_dir, layer = 'obszaryTestoweOrtoBW_00')
     columns = ['gml_id', 'godlo', 'akt_rok', 'piksel', 'kolor', 'zrodlo_danych',
                'uklad_xy', 'modul_archiwizacji', 'nr_zglosz', 'akt_data', 
                'czy_ark_wypelniony', 'url_do_pobrania', 'dt_pzgik', 'wlk_pliku_mb',
                'geometry']
     
     orto_gdf = gpd.GeoDataFrame(columns = columns, crs = "EPSG:2180")
-    wfs_layers = get_wfs_layers(url)[::-1]
+    wfs_layers = get_wfs_layers(url)
     not_overlapped_areas = training_areas_gdf
     
     # creating gdf with tiles to download
-    for orto_layer in wfs_layers[:5]: #wfs_layers[:5]:
+    for orto_layer in wfs_layers[11:19]: #wfs_layers[:5]:
         orto_layer_gdf = download_wfs_polygons(url, orto_layer)
         orto_layer_gdf['geometry'] = orto_layer_gdf['geometry'].apply(flip_geom)
-        orto_layer_gdf = orto_layer_gdf[orto_layer_gdf['kolor'] == 'RGB']
+        orto_layer_gdf = orto_layer_gdf[orto_layer_gdf['kolor'] == 'B/W']
         orto_layer_gdf = orto_layer_gdf[orto_layer_gdf['piksel'] == 0.25] 
         print(f'pobrano: {orto_layer}')
         
@@ -113,14 +113,15 @@ if __name__ == "__main__":
             print('All test areas covered by Ortos')
             break
    
-    set(orto_gdf['piksel'].to_list())     
-   
-    orto_gdf.to_file(db_dir, layer='downloaded_orto_RGB_01')
+    set(orto_gdf['piksel'].to_list())  
+    
+    orto_gdf.to_file(db_dir, layer='downloaded_orto_testBW_02')
     
     
     # downloading ortos 
     for orto_url in orto_gdf['url_do_pobrania'].to_list():
         download_img(orto_url, dst_dir)
     
+
 
     

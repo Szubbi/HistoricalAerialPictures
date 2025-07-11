@@ -65,23 +65,33 @@ def is_file_valid(filepath):
         print(f"Error with file '{filepath}': {e}")
         return False
     
-def move_patches(lables_src, imgs_src, dataset_dir, dataset, split):
+def move_patches(yolo_lables_src, binary_labels_src, imgs_src, dataset_dir, dataset, split):
     images_dir = os.path.join(dataset_dir, 'images', split)
-    labels_dir = os.path.join(dataset_dir, 'labels', split)
+    labels_dir = os.path.join(dataset_dir, 'binary_labels', split)
+    yolo_dir = os.path.join(dataset_dir, 'yolo_labels', split)
+    
+    for dir in [images_dir, labels_dir, yolo_dir]:
+        if not os.path.exists(dir):
+            os.makedirs(dir)
     
     for i, patch in enumerate(dataset):
         print(f"\rCopping {i} out of {len(dataset)}", end='', flush=True)
         
-        img_nme = patch.replace('.txt', '.jpg')
+        img_nme = patch.replace('.txt', '.png')
 
         img_src_dir = os.path.join(imgs_src, img_nme)
-        lbl_src_dir = os.path.join(lables_src, patch)
+        lbl_src_dir = os.path.join(binary_labels_src, img_nme)
+        yolo_src_dir = os.path.join(yolo_lables_src, patch)
 
-        if is_file_valid(img_src_dir) and is_file_valid(lbl_src_dir):
-            if not os.path.isfile(os.path.join(labels_dir, patch)):
-                copy(os.path.join(lables_src, patch), labels_dir)
+        if is_file_valid(img_src_dir) and is_file_valid(yolo_src_dir):
+            # move binary label
+            if not os.path.isfile(os.path.join(labels_dir, img_nme)):
+                copy(lbl_src_dir, labels_dir)
+            # move yolo label
+            if not os.path.isfile(os.path.join(yolo_dir, patch)):
+                copy(yolo_src_dir, yolo_dir)
             if not os.path.isfile(os.path.join(images_dir, img_nme)):
-                copy(os.path.join(imgs_src, img_nme), images_dir) 
+                copy(img_src_dir, images_dir) 
     
     print('Done') 
     

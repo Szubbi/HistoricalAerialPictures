@@ -15,14 +15,21 @@ from sklearn.preprocessing import KBinsDiscretizer
 
 
 if __name__ == '__main__':
-    sql_dir = '/media/pszubert/DANE/Uniwersytet Jagielloński/PhD Seminar - Piotrs_work - Piotrs_work/02_Budynki_MapJournal/02_Data/BudynkiPolskaDB.gpkg'
-    table_name = 'bd_siatka1970_2km_02'
-    dst_db = '/media/pszubert/DANE/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/Data.gpkg'
+    sql_dir = '/mnt/96729E38729E1D55/03_Dane/BudynkiPolskaDB.gpkg'
+    table_name = 'bd_siatka1970_02'
+    dst_db = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/Data.gpkg'
     
     #buildings_grid_df = load_sqllite_dataframe(sql_dir, table_name)
     buildings_grid_df = gpd.read_file(sql_dir, layer = table_name)
-    buildings_grid_df = buildings_grid_df[buildings_grid_df['Point_Count'] > 200]
-    buildings_number = buildings_grid_df['Point_Count'].to_numpy().reshape(-1,1)
+    buildings_grid_df = buildings_grid_df[buildings_grid_df['Point_Coun'] > 200]
+    buildings_grid_df = buildings_grid_df.sample(frac=1).reset_index(drop=1)
+    
+    #limiting samples only to areas we have data for 
+    orto_area = gpd.read_file(dst_db, layer='orto_BW_grid_00')
+    buildings_grid_df = buildings_grid_df[
+        buildings_grid_df.intersects(orto_area.union_all())]
+        
+    buildings_number = buildings_grid_df['Point_Coun'].to_numpy().reshape(-1,1)
     
     # putting records into classes for stratified sampling
     classifier = KBinsDiscretizer(
@@ -34,7 +41,7 @@ if __name__ == '__main__':
     buildings_grid_df['class'] = classes
     
     
-    plt.hist(buildings_grid_df['Point_Count'], bins=120, log=True)
+    plt.hist(buildings_grid_df['Point_Coun'], bins=120, log=True)
     for bin in bins:
         plt.axvline(bin, linestyle = '--', color='gray')
     plt.grid(False)
@@ -45,18 +52,19 @@ if __name__ == '__main__':
     
     
     # getting the training data location indexes
-    bd_idx = bd_df['OBJECTID'].to_list()
+    bd_idx = bd_df['OBJECTID_1'].to_list()
     classes = bd_df['class']
-    test_size = 1 - 200/len(bd_df)
+    test_size = 1 - 12/len(bd_df)
     
     X_train, X_test, y_train, y_test = train_test_split(
-        bd_idx, classes, test_size=test_size, stratify=classes)
+        bd_idx, classes, test_size=test_size, stratify=classes, random_state=42,
+        shuffle=True)
     
-    train_df = buildings_grid_df[buildings_grid_df['OBJECTID'].isin(X_train)]
+    train_df = buildings_grid_df[buildings_grid_df['OBJECTID_1'].isin(X_train)]
     
     # saving choosen areas back to the geopackage
     #save_datarame_sqllite(train_df, sql_dir, 'bd_trainingAreas_12')
-    train_df.to_file(dst_db, layer = 'obszaryPomiaruOrtoBW_02')
+    train_df.to_file(dst_db, layer = 'obszaryTreningoweOrtoBW_00')
     
     
     
