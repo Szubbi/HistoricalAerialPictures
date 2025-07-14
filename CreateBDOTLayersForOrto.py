@@ -17,29 +17,24 @@ if __name__ == "__main__":
     working_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec'
     db_dir = os.path.join(working_dir, '05_Data/Data.gpkg')
     buildings_db_dir = '/mnt/96729E38729E1D55/01_Badania/10_BudynkiPolska/02_DataProcessing/dataProcessing.gpkg'
+    ortos_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/01_InData/12_testOrtoBW'
+    ortos = [_ for _ in os.listdir(ortos_dir) if _.endswith('.tif')]
     
     hash_table = gpd.read_file(db_dir, layer = 'hash_table_01')
-    orto_extent = gpd.read_file(db_dir, layer = 'obszaryTreningoweOrtoBW_00')
-    
-    overlap_layers = hash_table[
-        hash_table.intersects(orto_extent.union_all())
-        ]['file_name'].to_list()
     
     bdot_gdf = gpd.GeoDataFrame(columns = ['file_name', 'geometry'], crs='ETRS_1989_Poland_CS92')
     
-    for layer in overlap_layers:
-        print(f'Working on {layer}')
-        layer_gdf = gpd.read_file(buildings_db_dir, layer=layer).to_crs('ETRS_1989_Poland_CS92')
-        # Fix invalid geometries
-        layer_gdf = layer_gdf[layer_gdf.geometry.notnull()]
-        layer_gdf['geometry'] = layer_gdf['geometry'].buffer(0)
-        layer_gdf = layer_gdf[
-            layer_gdf.intersects(orto_extent.union_all())]
-        bdot_gdf  = pd.concat([bdot_gdf , layer_gdf])
+    for orto in ortos:
+        print(f'Working on {orto}')
+        orto_dir = os.path.join(ortos_dir, orto)
+        overlaping_layers = get_layers_extent(orto_dir, hash_table)
+        buildings_gdf = get_geometries(buildings_db_dir, overlaping_layers['file_name'].to_list(), orto_dir)
+
+        bdot_gdf  = pd.concat([bdot_gdf , buildings_gdf])
         
 
     
-    bdot_gdf.to_file(db_dir, layer = 'obszaryTreningoweOrtoBW_BDOT_00')
+    bdot_gdf.to_file(db_dir, layer = 'obszaryTestoweOrtoBW_BDOT_00')
     
     
     

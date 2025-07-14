@@ -100,9 +100,9 @@ if __name__ == '__main__':
 
     # Train the model
     model.train(
-        data='YOLO_Dataset.yaml',         # Path to dataset YAML
+        data='/home/pszubert/Dokumenty/04_ConvDataset/YOLO_Dataset.yaml',         # Path to dataset YAML
         imgsz=640,                # Image size
-        epochs=25,               # Max epochs
+        epochs=50,               # Max epochs
         patience=10,              # Early stopping patience
         batch=32,                 # Batch size
         lr0=0.005,                 # Initial learning rate
@@ -114,8 +114,8 @@ if __name__ == '__main__':
         cache=True,               # Cache images for faster training
         save=True,                # Save checkpoints
         save_period=5,            # Save every 5 epochs
-        project='runs/train',     # Output directory
-        name='yolo-25e-005-01' # Run name
+        project='/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/12_YOLO_Training/02_YOLO_50e_20250713',     # Output directory
+        name='yolo-50e-005-01' # Run name
     )
 
 

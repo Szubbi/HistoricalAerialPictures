@@ -14,6 +14,7 @@ import pandas as pd
 import os
 
 from shutil import copy
+from PIL import Image, ImageDraw
 
 
 def read_annotations_xml(xml_dir:str) -> np.array:
@@ -117,3 +118,30 @@ def replace_commas_with_spaces_in_file(file_path):
         with open(file_path, 'w', encoding='latin-1') as file:
             file.write(updated_content)
 
+
+def draw_yolo_polygons_on_pil(image, yolo_text_path):
+    """
+    Draw YOLO polygon annotations on a PIL image.
+
+    Parameters:
+    - image: PIL.Image object
+    - yolo_text_path: path to a .txt file containing YOLO polygon annotations (one per line)
+
+    Returns:
+    - PIL.Image object with polygons drawn
+    """
+    img = image.convert("RGB")
+    draw = ImageDraw.Draw(img)
+    w, h = img.size
+
+    with open(yolo_text_path, 'r') as file:
+        lines = file.readlines()
+
+    for line in lines:
+        parts = line.strip().split()
+        if len(parts) >= 9:
+            coords = list(map(float, parts[1:]))
+            points = [(coords[i] * w, coords[i+1] * h) for i in range(0, len(coords), 2)]
+            draw.polygon(points, outline="red", width=4)
+
+    return img

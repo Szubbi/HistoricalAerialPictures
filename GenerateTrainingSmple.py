@@ -25,7 +25,7 @@ from enum import Enum
 from scipy.stats import rv_discrete
 from scipy.fftpack import dct
 from ImageConverter import ImageConverter
-from util import save_datarame_sqllite, load_sqllite_dataframe
+from util import save_datarame_sqllite, load_sqllite_dataframe, draw_yolo_polygons_on_pil
 
 
 def spatial_hash_table(src_db_dir:str):
@@ -450,6 +450,38 @@ def check_imgs_labels(dataset_dir, split):
     else:
         print('All imgs has matching labels')
 
+
+def display_labels(pil_images, binary_labels, yolo_labels):
+    """
+    Display 8 PIL images with YOLO predictions and ground truth polygon annotations.
+
+    Parameters:
+    - pil_images: list of 8 PIL.Image objects
+    - binary_labels: list of 8 binary labels
+    - yolo_labels: list of 8 strings, each containing YOLO polygon annotations
+    """
+    assert len(pil_images) == len(binary_labels) == len(yolo_labels) == 8, "All input lists must have 8 elements."
+
+    fig, axes = plt.subplots(8, 3, figsize=(15, 30))
+    for i in range(8):
+        # Original image
+        axes[i, 0].imshow(pil_images[i].convert('L'), cmap='gray')
+        axes[i, 0].set_title(f'Image {i+1}')
+        axes[i, 0].axis('off')
+
+        # YOLO prediction overlay
+        axes[i, 1].imshow(binary_labels[i])
+        axes[i, 1].set_title(f'Binary label {i+1}')
+        axes[i, 1].axis('off')
+
+        # Ground truth polygon overlay
+        gt_img = draw_yolo_polygons_on_pil(pil_images[i], yolo_labels[i])
+        axes[i, 2].imshow(gt_img)
+        axes[i, 2].set_title(f'Yolo label {i+1}')
+        axes[i, 2].axis('off')
+
+    plt.tight_layout()
+    plt.show()
        
 if __name__ == "__main__":
     pass

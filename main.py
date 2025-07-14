@@ -19,6 +19,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import KBinsDiscretizer
 from shutil import copy
 from datetime import datetime
+from PIL import Image
+from random import choices
 
 if __name__ == "__main__":
     working_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec'
@@ -289,7 +291,30 @@ if __name__ == "__main__":
 
 
 
-
+    # random tests of dataset
+    dataset_dir = '/home/pszubert/Dokumenty/04_ConvDataset'
+    split = 'train'
+    
+    def show_eight_random(dataset_dir, split):
+        img_dir = os.path.join(dataset_dir, 'images', split)
+        binary_dir = os.path.join(dataset_dir, 'binary_labels', split)
+        yolo_dir = os.path.join(dataset_dir, 'labels', split)
+        
+        imgs = [_ for _ in os.listdir(img_dir) if _.endswith('.png')]
+        imgs = choices(population=imgs, k=8)
+        binary_labels = imgs
+        yolo_labels = [_.replace('.png', '.txt') for _ in imgs]
+    
+        imgs = [os.path.join(img_dir, _) for _ in imgs]  
+        binary_labels = [os.path.join(binary_dir, _) for _ in binary_labels]
+        yolo_labels = [os.path.join(yolo_dir, _) for _ in yolo_labels]
+        
+        imgs = [Image.open(_) for _ in imgs]
+        binary_labels = [Image.open(_) for _ in binary_labels]
+        
+        display_labels(imgs, binary_labels, yolo_labels)
+        
+    show_eight_random(dataset_dir, split)
         
     
     
