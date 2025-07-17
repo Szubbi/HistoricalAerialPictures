@@ -16,26 +16,11 @@ from ultralytics import YOLO
 from onnx import helper, numpy_helper, TensorProto
 
 
-def keep_segmentation_output_and_slice_channel(model_path: str, output_path: str = "best_segmentation_only.onnx") -> str:
-    """
-    Loads an ONNX model, retains only the segmentation-related output, slices it to keep only the first channel,
-    and saves the modified model.
-
-    Parameters:
-        model_path (str): Path to the original ONNX model.
-        output_path (str): Path to save the modified ONNX model.
-
-    Returns:
-        str: Path to the saved ONNX model with only the first segmentation channel.
-    """
+def keep_segmentation_output_slice_and_resize(model_path: str, output_path: str = "best_segmentation_resized.onnx") -> str:
     model = onnx.load(model_path)
 
-    print("Original model outputs:")
-    for output in model.graph.output:
-        print(f"- {output.name}")
-
+    # Identify segmentation output
     segmentation_outputs = []
-
     for output in model.graph.output:
         if "proto" in output.name.lower() or "mask" in output.name.lower():
             segmentation_outputs.append(output)
@@ -52,12 +37,11 @@ def keep_segmentation_output_and_slice_channel(model_path: str, output_path: str
     selected_output = segmentation_outputs[0]
     original_output_name = selected_output.name
 
-    # Create a Slice node to extract the first channel
+    # Slice to keep only the first channel
     slice_output_name = original_output_name + "_sliced"
-
-    starts_initializer = numpy_helper.from_array(np.array([0, 0, 0, 0], dtype=np.int64), name="slice_starts")
-    ends_initializer = numpy_helper.from_array(np.array([1, 1, 1 << 30, 1 << 30], dtype=np.int64), name="slice_ends")
-    axes_initializer = numpy_helper.from_array(np.array([0, 1, 2, 3], dtype=np.int64), name="slice_axes")
+    starts_initializer = numpy_helper.from_array(np.array([0], dtype=np.int64), name="slice_starts")
+    ends_initializer = numpy_helper.from_array(np.array([1], dtype=np.int64), name="slice_ends")
+    axes_initializer = numpy_helper.from_array(np.array([1], dtype=np.int64), name="slice_axes")
 
     model.graph.initializer.extend([starts_initializer, ends_initializer, axes_initializer])
 
@@ -67,18 +51,36 @@ def keep_segmentation_output_and_slice_channel(model_path: str, output_path: str
         outputs=[slice_output_name],
         name="SliceFirstChannel"
     )
-
     model.graph.node.append(slice_node)
 
-    # Clear and redefine the model output
+    # Resize to 640x640
+    resize_output_name = slice_output_name + "_resized"
+    roi_initializer = numpy_helper.from_array(np.array([], dtype=np.float32), name="roi")
+    scales_initializer = numpy_helper.from_array(np.array([], dtype=np.float32), name="scales")
+    sizes_initializer = numpy_helper.from_array(np.array([1, 1, 640, 640], dtype=np.int64), name="sizes")
+
+    model.graph.initializer.extend([roi_initializer, scales_initializer, sizes_initializer])
+
+    resize_node = helper.make_node(
+        "Resize",
+        inputs=[slice_output_name, "roi", "scales", "sizes"],
+        outputs=[resize_output_name],
+        mode="linear",
+        coordinate_transformation_mode="asymmetric",
+        name="ResizeTo640x640"
+    )
+    model.graph.node.append(resize_node)
+
+    # Set final output
     model.graph.ClearField("output")
-    output_tensor = helper.make_tensor_value_info(slice_output_name, TensorProto.FLOAT, [1, 1, None, None])
+    output_tensor = helper.make_tensor_value_info(resize_output_name, TensorProto.FLOAT, [1, 1, 640, 640])
     model.graph.output.extend([output_tensor])
 
     onnx.save(model, output_path)
-
-    print(f"\nModified ONNX model saved as '{output_path}' with output: {slice_output_name}")
+    print(f"Saved modified model to: {output_path}")
     return output_path
+
+
 
 
 
@@ -95,7 +97,7 @@ if __name__ == '__main__':
 
     # Load a YOLO model
     model = YOLO('/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/yolo11n-seg.pt')
-    model.model.args['in_chanels'] = 1 #we have one band images
+    print(model.task)
     
 
     # Train the model

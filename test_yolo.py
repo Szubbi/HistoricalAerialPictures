@@ -18,6 +18,7 @@ from ultralytics import YOLO
 from util import count_rows_in_file, draw_yolo_polygons_on_pil
 from PIL import Image, ImageDraw
 from cv2 import imread
+from YoloTraining import keep_segmentation_output_and_slice_channel
 
 
 def get_valid_random_samples_lazy(file_list, sample_size, count_rows_in_file):
@@ -69,13 +70,13 @@ def display_predictions(pil_images, yolo_results, yolo_texts):
 
 if __name__ == "__main__":
 
-    model = YOLO('/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/12_YOLO_Training/runs/train/yolo-25e-005-012/weights/best.pt')
+    model = YOLO('/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/12_YOLO_Training/02_YOLO_50e_20250713/yolo-50e-005-01/weights/best.pt')
     
-    model.export(format='onnx')
+    # model.export(format='onnx', simplify=True)
+        
     
-    
-    test_immgs_dir = '/home/pszubert/Dokumenty/03_DeepLab_dataset/images/'
-    test_labels_dir = '/home/pszubert/Dokumenty/03_DeepLab_dataset/yolo_labels/'
+    test_immgs_dir = '/home/pszubert/Dokumenty/04_ConvDataset/images/test'
+    test_labels_dir = '/home/pszubert/Dokumenty/04_ConvDataset/labels/test'
     
     test_labels = [os.path.join(test_labels_dir, _) for _ in os.listdir(test_labels_dir) if _.endswith('.txt')]
 
@@ -90,4 +91,3 @@ if __name__ == "__main__":
 
     plt.imshow(draw_yolo_polygons_on_pil(sample_imgs[2], sample_labels[2]))
 
-    
