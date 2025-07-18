@@ -6,7 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import os
 from PIL import Image
-from ray import tune
+from ray import tune, air
 from ray.tune.schedulers import ASHAScheduler
 from ray.tune.search.bayesopt import BayesOptSearch
 
@@ -75,7 +75,7 @@ def train_one_epoch(model, optimizer, data_loader, device):
     model.train()
     for images, targets in data_loader:
         images = list(img.to(device) for img in images)
-        targets = [{(device) for k, v in t.items()} for t in targets]
+        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
         loss_dict = model(images, targets)
         losses = sum(loss for loss in loss_dict.values())
@@ -158,7 +158,7 @@ def train_maskrcnn(config, checkpoint_dir=None):
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
-    for epoch in range(10):
+    for epoch in range(config.get("num_epochs", 10)):
         train_one_epoch(model, optimizer, train_loader, device)
         iou, dice, acc = validate(model, val_loader, device)
 
@@ -172,11 +172,12 @@ def train_maskrcnn(config, checkpoint_dir=None):
         tune.report(iou=iou, dice=dice, accuracy=acc)
 
 if __name__ == "__main__":
-    train_image_dir = "s"
-    train_mask_dir = ""
-    test_image_dir = ""
-    test_mask_dir_= ""
-    NUM_EPOCHS = 0
+    train_image_dir = "/home/pszubert/Dokumenty/04_ConvDataset/images/train"
+    train_mask_dir = "/home/pszubert/Dokumenty/04_ConvDataset/maskrcnn_labels/train"
+    test_image_dir = "/home/pszubert/Dokumenty/04_ConvDataset/images/test"
+    test_mask_dir_= "/home/pszubert/Dokumenty/04_ConvDataset/maskrcnn_labels/test"
+    checkpoint_dir ='/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/13_MaskRcnn_Training'
+    NUM_EPOCHS = 50
     
 
     train_dataset = GrayscaleMaskRCNNDataset(train_image_dir, train_mask_dir)
@@ -185,7 +186,8 @@ if __name__ == "__main__":
     search_space = {
         "lr": tune.uniform(0.001, 0.01),
         "momentum": tune.uniform(0.8, 0.95),
-        "weight_decay": tune.uniform(0.0001, 0.001)
+        "weight_decay": tune.uniform(0.0001, 0.001),
+        "num_epochs": NUM_EPOCHS
     }
 
     scheduler = ASHAScheduler(
@@ -208,6 +210,8 @@ if __name__ == "__main__":
         ),
         run_config=air.RunConfig(
             name="maskrcnn_bayesopt",
+            storage_path=checkpoint_dir,
+            verbose=1,
             stop={"iou": 0.95},
             checkpoint_config=air.CheckpointConfig(
                 checkpoint_score_attribute="iou",
