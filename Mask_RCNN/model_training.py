@@ -21,15 +21,17 @@ class GrayscaleMaskRCNNDataset(Dataset):
     def __getitem__(self, idx):
         img_path = os.path.join(self.image_dir, self.image_files[idx])
         mask_path = os.path.join(self.mask_dir, self.mask_files[idx])
-
-        img = Image.open(img_path).convert("L")  # Grayscale
+        img = Image.open(img_path).convert("L")
         mask = Image.open(mask_path)
-
-        img = F.to_tensor(img)  # [1, H, W]
+        img = F.to_tensor(img)
         mask = np.array(mask)
 
         obj_ids = np.unique(mask)
         obj_ids = obj_ids[obj_ids != 0]
+
+        if len(obj_ids) == 0:
+            # Skip this sample by returning the next one
+            return self.__getitem__((idx + 1) % len(self))
 
         masks = mask == obj_ids[:, None, None]
         boxes = []
@@ -38,7 +40,6 @@ class GrayscaleMaskRCNNDataset(Dataset):
             xmin, xmax = np.min(pos[1]), np.max(pos[1])
             ymin, ymax = np.min(pos[0]), np.max(pos[0])
             boxes.append([xmin, ymin, xmax, ymax])
-
         boxes = torch.as_tensor(boxes, dtype=torch.float32)
         labels = torch.ones((len(obj_ids),), dtype=torch.int64)
         masks = torch.as_tensor(masks, dtype=torch.uint8)
@@ -49,8 +50,8 @@ class GrayscaleMaskRCNNDataset(Dataset):
             "masks": masks,
             "image_id": torch.tensor([idx])
         }
-
         return img, target
+
 
     def __len__(self):
         return len(self.image_files)
