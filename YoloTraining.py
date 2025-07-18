@@ -93,7 +93,7 @@ if __name__ == '__main__':
     else:
         print("❌ GPU is not available. Training will use CPU.")
 
-
+    torch.cuda.set_device(0)
 
     # Load a YOLO model
     model = YOLO('/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/yolo11n-seg.pt')
@@ -116,7 +116,7 @@ if __name__ == '__main__':
         cache=True,               # Cache images for faster training
         save=True,                # Save checkpoints
         save_period=5,            # Save every 5 epochs
-        project='/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/12_YOLO_Training/02_YOLO_50e_20250713',     # Output directory
+        project='/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/12_YOLO_Training/02_YOLO_100e_20250718',     # Output directory
         name='yolo-50e-005-01' # Run name
     )
 

@@ -1,12 +1,13 @@
 import torch
 import torchvision
 from torchvision.models.detection import maskrcnn_resnet50_fpn
+from torchvision.models.detection.transform import GeneralizedRCNNTransform
 from torchvision.transforms import functional as F
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import os
 from PIL import Image
-from ray import tune, air
+from ray import tune, air, init
 from ray.tune.schedulers import ASHAScheduler
 from ray.tune.search.bayesopt import BayesOptSearch
 
@@ -21,28 +22,41 @@ class GrayscaleMaskRCNNDataset(Dataset):
     def __getitem__(self, idx):
         img_path = os.path.join(self.image_dir, self.image_files[idx])
         mask_path = os.path.join(self.mask_dir, self.mask_files[idx])
-        img = Image.open(img_path).convert("L")
+
+        img = Image.open(img_path).convert("L")  # Ensure grayscale
         mask = Image.open(mask_path)
-        img = F.to_tensor(img)
+
+        img = F.to_tensor(img)  # Shape: [1, H, W]
         mask = np.array(mask)
 
         obj_ids = np.unique(mask)
         obj_ids = obj_ids[obj_ids != 0]
 
         if len(obj_ids) == 0:
-            # Skip this sample by returning the next one
-            return self.__getitem__((idx + 1) % len(self))
+            return self.__getitem__((idx + 1) % len(self))  # Skip background-only
 
         masks = mask == obj_ids[:, None, None]
-        boxes = []
-        for m in masks:
+
+        valid_boxes = []
+        valid_masks = []
+
+        for i, m in enumerate(masks):
             pos = np.where(m)
             xmin, xmax = np.min(pos[1]), np.max(pos[1])
             ymin, ymax = np.min(pos[0]), np.max(pos[0])
-            boxes.append([xmin, ymin, xmax, ymax])
-        boxes = torch.as_tensor(boxes, dtype=torch.float32)
-        labels = torch.ones((len(obj_ids),), dtype=torch.int64)
-        masks = torch.as_tensor(masks, dtype=torch.uint8)
+
+            if xmax <= xmin or ymax <= ymin:
+                continue  # Skip invalid box and corresponding mask
+
+            valid_boxes.append([xmin, ymin, xmax, ymax])
+            valid_masks.append(m)
+
+        if len(valid_boxes) == 0:
+            return self.__getitem__((idx + 1) % len(self))  # Skip if all boxes were invalid
+
+        boxes = torch.as_tensor(valid_boxes, dtype=torch.float32)
+        labels = torch.ones((len(valid_boxes),), dtype=torch.int64)
+        masks = torch.as_tensor(valid_masks, dtype=torch.uint8)
 
         target = {
             "boxes": boxes,
@@ -50,7 +64,9 @@ class GrayscaleMaskRCNNDataset(Dataset):
             "masks": masks,
             "image_id": torch.tensor([idx])
         }
+
         return img, target
+
 
 
     def __len__(self):
@@ -68,6 +84,14 @@ def get_model_instance_segmentation(num_classes):
     hidden_layer = 256
     model.roi_heads.mask_predictor = torchvision.models.detection.mask_rcnn.MaskRCNNPredictor(
         in_features_mask, hidden_layer, num_classes)
+    
+    # Override the transform to avoid resizing
+    model.transform = GeneralizedRCNNTransform(
+        min_size=640,
+        max_size=640,
+        image_mean=[0.5],  # for grayscale
+        image_std=[0.5]
+    )
 
     return model
 
@@ -151,8 +175,8 @@ def train_maskrcnn(config, checkpoint_dir=None):
         weight_decay=config["weight_decay"]
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, collate_fn=lambda x: tuple(zip(*x)))
-    val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False, collate_fn=lambda x: tuple(zip(*x)))
+    train_loader = DataLoader(train_dataset, batch_size=5, shuffle=True, collate_fn=lambda x: tuple(zip(*x)))
+    val_loader = DataLoader(val_dataset, batch_size=5, shuffle=False, collate_fn=lambda x: tuple(zip(*x)))
 
     if checkpoint_dir:
         checkpoint = torch.load(os.path.join(checkpoint_dir, "checkpoint.pt"))
@@ -160,6 +184,7 @@ def train_maskrcnn(config, checkpoint_dir=None):
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
     for epoch in range(config.get("num_epochs", 10)):
+        print(f"Epoch {epoch + 1}/{config.get('num_epochs', 10)}")
         train_one_epoch(model, optimizer, train_loader, device)
         iou, dice, acc = validate(model, val_loader, device)
 
@@ -179,7 +204,15 @@ if __name__ == "__main__":
     test_mask_dir_= "/home/pszubert/Dokumenty/04_ConvDataset/maskrcnn_labels/test"
     checkpoint_dir ='/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/13_MaskRcnn_Training'
     NUM_EPOCHS = 50
+
+        # Check if CUDA (GPU) is available
+    if torch.cuda.is_available():
+        print("GPU is available for training.")
+        print(f"Using device: {torch.cuda.get_device_name(0)}")
+    else:
+        print("❌ GPU is not available. Training will use CPU.")
     
+    init(num_gpus=1, num_cpus=10)
 
     train_dataset = GrayscaleMaskRCNNDataset(train_image_dir, train_mask_dir)
     val_dataset = GrayscaleMaskRCNNDataset(train_image_dir, train_mask_dir)
@@ -212,7 +245,7 @@ if __name__ == "__main__":
         run_config=air.RunConfig(
             name="maskrcnn_bayesopt",
             storage_path=checkpoint_dir,
-            verbose=1,
+            verbose=0,
             stop={"iou": 0.95},
             checkpoint_config=air.CheckpointConfig(
                 checkpoint_score_attribute="iou",
