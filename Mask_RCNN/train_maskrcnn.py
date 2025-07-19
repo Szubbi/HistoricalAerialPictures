@@ -8,8 +8,9 @@ import numpy as np
 import os
 from PIL import Image
 import logging
-import time
+from datetime import datetime
 from collections import defaultdict
+import time
 
 # Dataset class
 class GrayscaleMaskRCNNDataset(Dataset):
@@ -113,15 +114,18 @@ def print_progress_bar(iteration, total, prefix='', suffix='', length=50):
     percent = f"{100 * (iteration / float(total)):.1f}"
     filled_length = int(length * iteration // total)
     bar = '=' * filled_length + '-' * (length - filled_length)
-    print(f'{prefix} |{bar}| {percent}% {suffix}', end='')
+    print(f'{prefix} |{bar}| {percent}% {suffix}', end='')
     if iteration == total:
         print()
 
 # Training loop with progress bar
+
 def train_one_epoch_with_progress(model, optimizer, data_loader, device, epoch, logger):
     model.train()
     total = len(data_loader)
+    start_epoch = time.time()
     for i, (images, targets) in enumerate(data_loader):
+        start_batch = time.time()
         images = list(img.to(device) for img in images)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
@@ -132,8 +136,27 @@ def train_one_epoch_with_progress(model, optimizer, data_loader, device, epoch, 
         losses.backward()
         optimizer.step()
 
-        logger.info(f"Epoch {epoch}, Batch {i+1}/{total}, Loss: {losses.item():.4f}")
-        print_progress_bar(i + 1, total, prefix=f"Epoch {epoch}", suffix="Complete")
+        batch_time = time.time() - start_batch
+        logger.info(f"Epoch {epoch}, Batch {i+1}/{total}, Loss: {losses.item():.4f}, Time: {batch_time:.2f}s")
+
+        percent = f"{100 * (i + 1) / float(total):.1f}"
+        filled_length = int(50 * (i + 1) // total)
+        bar = '=' * filled_length + '-' * (50 - filled_length)
+        print(f"Epoch {epoch} |{bar}| {percent}% Loss: {losses.item():.4f} Time: {batch_time:.2f}s", end='')
+
+    print()
+    epoch_time = time.time() - start_epoch
+    logger.info(f"Epoch {epoch} completed in {epoch_time:.2f} seconds.")
+
+    loss_dict = model(images, targets)
+    losses = sum(loss for loss in loss_dict.values())
+
+    optimizer.zero_grad()
+    losses.backward()
+    optimizer.step()
+
+    logger.info(f"Epoch {epoch}, Batch {i+1}/{total}, Loss: {losses.item():.4f}")
+    print_progress_bar(i + 1, total, prefix=f"Epoch {epoch}", suffix="Complete")
 
 # Validation with logging
 def validate_with_logging(model, data_loader, device, epoch, logger):
@@ -172,8 +195,8 @@ def validate_with_logging(model, data_loader, device, epoch, logger):
     return mean_iou, mean_dice, mean_accuracy
 
 # Main training loop
-def run_experiments(train_dataset, val_dataset, device, num_epochs=50):
-    os.makedirs("training_logs", exist_ok=True)
+def run_experiments(train_dataset, val_dataset, device, log_dir, num_epochs=50):
+    os.makedirs(log_dir, exist_ok=True)
     hyperparams = {
         "exp1": {"lr": 0.005, "momentum": 0.9, "weight_decay": 0.0005},
         "exp2": {"lr": 0.001, "momentum": 0.9, "weight_decay": 0.0001},
@@ -183,7 +206,7 @@ def run_experiments(train_dataset, val_dataset, device, num_epochs=50):
 
     for exp_name, params in hyperparams.items():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = f"training_logs/{exp_name}_{timestamp}.log"
+        log_filename = os.path.join(log_dir, f"{exp_name}_{timestamp}.log")
         logging.basicConfig(filename=log_filename, level=logging.INFO)
         logger = logging.getLogger(exp_name)
 
