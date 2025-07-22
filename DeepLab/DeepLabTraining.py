@@ -4,7 +4,7 @@ import os
 import tf2onnx
 
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
-from DeepLabModel import DeeplabV3Plus
+from DeepLab.DeepLabModel import DeeplabV3Plus
 from keras import backend as K
 
 # Creating Metrics for instance segmentation
