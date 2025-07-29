@@ -97,28 +97,52 @@ if __name__ == '__main__':
 
     # Load a YOLO model
     model = YOLO('/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/yolo11n-seg.pt')
-    print(model.task)
+
+    # HPO tunning 
+    search_space = {
+        'lr0': (1e-5, 1e-1), # Initial learning rate
+        'lrf': (0.01, 1.0), # Final learning rate multiplier
+        'momentum': (0.6, 0.98), # Momentum for SGD
+        'weight_decay': (0.0001, 0.01), # Regularization
+        'warmup_epochs': (0, 5), # Warm-up period
+        'warmup_bias_lr': (0.0, 0.2), # Bias learning rate during warm-up
+        'box': (0.02, 0.2), # Box loss gain
+        'cls': (0.2, 4.0), # Class loss gain
+        'obj': (0.2, 4.0), #	Objectness loss gain
+        "degrees": (0.0, 45.0)
+    }
+
+    model.tune(
+        data='/home/pszubert/Dokumenty/04_ConvDataset/YOLO_Dataset.yaml', 
+        imgsz=640,
+        epochs=20,
+        iterations=100,
+        optimizer='AdamW',
+        plots=True,
+        project='/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/12_YOLO_Training/HPO'
+        )
+
     
 
     # Train the model
-    model.train(
-        data='/home/pszubert/Dokumenty/04_ConvDataset/YOLO_Dataset.yaml',         # Path to dataset YAML
-        imgsz=640,                # Image size
-        epochs=50,               # Max epochs
-        patience=10,              # Early stopping patience
-        batch=32,                 # Batch size
-        lr0=0.005,                 # Initial learning rate
-        lrf=0.01,                 # Final learning rate fraction
-        warmup_epochs=5,
-        optimizer='SGD',          # Optimizer (SGD or Adam)
-        cos_lr=True,              # Use cosine learning rate scheduler
-        amp=True,                 # Mixed precision training
-        cache=True,               # Cache images for faster training
-        save=True,                # Save checkpoints
-        save_period=5,            # Save every 5 epochs
-        project='/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/12_YOLO_Training/02_YOLO_100e_20250718',     # Output directory
-        name='yolo-50e-005-01' # Run name
-    )
+    # model.train(
+    #     data='/home/pszubert/Dokumenty/04_ConvDataset/YOLO_Dataset.yaml',         # Path to dataset YAML
+    #     imgsz=640,                # Image size
+    #     epochs=50,               # Max epochs
+    #     patience=10,              # Early stopping patience
+    #     batch=32,                 # Batch size
+    #     lr0=0.005,                 # Initial learning rate
+    #     lrf=0.01,                 # Final learning rate fraction
+    #     warmup_epochs=5,
+    #     optimizer='SGD',          # Optimizer (SGD or Adam)
+    #     cos_lr=True,              # Use cosine learning rate scheduler
+    #     amp=True,                 # Mixed precision training
+    #     cache=True,               # Cache images for faster training
+    #     save=True,                # Save checkpoints
+    #     save_period=5,            # Save every 5 epochs
+    #     project='/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/12_YOLO_Training/02_YOLO_100e_20250718',     # Output directory
+    #     name='yolo-50e-005-01' # Run name
+    # )
 
 
 
