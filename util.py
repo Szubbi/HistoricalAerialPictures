@@ -12,6 +12,10 @@ import xmltodict
 import sqlite3
 import pandas as pd
 import os
+import rasterio
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import matplotlib.ticker as ticker
 
 from shutil import copy
 from PIL import Image, ImageDraw
@@ -145,3 +149,137 @@ def draw_yolo_polygons_on_pil(image, yolo_text_path):
             draw.polygon(points, outline="red", width=4)
 
     return img
+
+def split_geotiff_to_patches(input, patch_size, overlap_ratio):
+    if isinstance(input, str):
+        with rasterio.open(input) as src:
+            img = src.read(1)
+            height, width = img.shape
+            transform = src.transform
+            
+    if isinstance(input, tuple):
+        img, transform = input
+        height, width = img.shape
+    
+    patches = []
+    step = int(patch_size * (1 - overlap_ratio))
+    
+    for i in range(0, height, step):
+        for j in range(0, width, step):
+            patch = img[i:i+patch_size, j:j+patch_size]
+            if patch.shape[0] < patch_size or patch.shape[1] < patch_size:
+                # Handle the last row/column patches
+                patch = img[max(0, height-patch_size):height, max(0, width-patch_size):width]
+            
+            # Calculate the transform for the patch
+            patch_transform = rasterio.transform.Affine(
+                transform.a, transform.b, transform.c + j * transform.a,
+                transform.d, transform.e, transform.f + i * transform.e
+            )
+            
+            patches.append((patch, patch_transform))
+
+    return patches
+
+
+
+def draw_patch_grid_on_geotiff(input, patch_size, overlap_ratio, show_labels=True):
+    """
+    Draws a grid overlay on a GeoTIFF image to visualize patch splitting and optionally labels each patch.
+
+    Parameters:
+    - file_path: str, path to the GeoTIFF file
+    - patch_size: int, size of each patch (in pixels)
+    - overlap_ratio: float, overlap ratio between patches (0 to <1)
+    - show_labels: bool, whether to display patch index labels
+    """
+    if isinstance(input, str):
+        with rasterio.open(input) as src:
+            img = src.read(1)
+            height, width = img.shape
+            transform = src.transform
+            
+    if isinstance(input, tuple):
+        img, transform = input
+        height, width = img.shape
+
+    step = int(patch_size * (1 - overlap_ratio))
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.imshow(img, cmap='gray')
+    
+    print('Calculating grid postitions')
+    # Calculate grid positions
+    x_positions = []
+    for j in range(0, width, step):
+        if j + patch_size > width:
+            j = width - patch_size
+            x_positions.append(j)
+            x_positions.append(width)
+        else:
+            x_positions.append(j)
+            x_positions.append(j + patch_size)
+            
+    x_positions = sorted(set(x_positions))
+    
+    y_positions = []
+    for i in range(0, height, step):
+        if i + patch_size > height:
+            i = height - patch_size
+            y_positions.append(i)
+            y_positions.append(height)
+        else:
+            y_positions.append(i)
+            y_positions.append(i + patch_size)
+            
+    y_positions = sorted(set(y_positions))
+
+
+    # Draw grid lines
+    for x in x_positions:
+        ax.axvline(x=x, color='red', linestyle='--', linewidth=0.5)
+    ax.axvline(x=width, color='red', linestyle='--', linewidth=0.5)
+
+    for y in y_positions:
+        ax.axhline(y=y, color='red', linestyle='--', linewidth=0.5)
+    ax.axhline(y=height, color='red', linestyle='--', linewidth=0.5)
+
+    # Add labels if requested
+    print("drawing labels")
+    if show_labels:
+        patch_index = 0
+        for i in range(0, height, step):
+            for j in range(0, width, step):
+                center_x = j + patch_size / 2
+                center_y = i + patch_size / 2
+                if center_x < width and center_y < height:
+                    ax.text(center_x, center_y, str(patch_index),
+                            color='yellow', fontsize=6, weight='bold',
+                            ha='center', va='center')
+                elif center_x < width and center_y > height:
+                    ax.text(center_x, i, str(patch_index),
+                            color='yellow', fontsize=6, weight='bold',
+                            ha='center', va='center')
+                elif center_x > width and center_y < height:
+                    ax.text(j, center_y, str(patch_index),
+                            color='yellow', fontsize=6, weight='bold',
+                            ha='center', va='center')
+                else:
+                    ax.text(j, i, str(patch_index),
+                            color='yellow', fontsize=6, weight='bold',
+                            ha='center', va='center')
+                patch_index += 1
+
+    ax.set_title("Patch Grid" + (" with Labels" if show_labels else ""))
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(500))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(500))
+    ax.set_xlim(0, width)
+    ax.set_ylim(height, 0)
+    plt.tight_layout()
+    plt.show()
+
+
+
+
+
+

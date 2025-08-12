@@ -291,19 +291,18 @@ def split_geotiff_to_patches(input, patch_size, overlap_ratio):
     step = int(patch_size * (1 - overlap_ratio))
     
     for i in range(0, height, step):
-        if i + patch_size > height:
-            i = height - patch_size
         for j in range(0, width, step):
-            if j + patch_size > width:
-                j = width - patch_size
-
             patch = img[i:i+patch_size, j:j+patch_size]
-
+            if patch.shape[0] < patch_size or patch.shape[1] < patch_size:
+                # Handle the last row/column patches
+                patch = img[max(0, height-patch_size):height, max(0, width-patch_size):width]
+            
+            # Calculate the transform for the patch
             patch_transform = rasterio.transform.Affine(
                 transform.a, transform.b, transform.c + j * transform.a,
                 transform.d, transform.e, transform.f + i * transform.e
             )
-
+            
             patches.append((patch, patch_transform))
 
     return patches
