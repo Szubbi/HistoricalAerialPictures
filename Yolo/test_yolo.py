@@ -18,7 +18,7 @@ from ultralytics import YOLO
 from util import count_rows_in_file, draw_yolo_polygons_on_pil
 from PIL import Image, ImageDraw
 from cv2 import imread
-from YoloTraining import keep_segmentation_output_and_slice_channel
+from Yolo.YoloTraining import keep_segmentation_output_and_slice_channel
 
 
 def get_valid_random_samples_lazy(file_list, sample_size, count_rows_in_file):

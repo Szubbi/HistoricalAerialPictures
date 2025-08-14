@@ -16,9 +16,12 @@ import rasterio
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.ticker as ticker
+import torch
 
 from shutil import copy
 from PIL import Image, ImageDraw
+from Mask_RCNN.train_maskrcnn import get_model_instance_segmentation
+from torchvision.transforms import functional as F
 
 
 def read_annotations_xml(xml_dir:str) -> np.array:
@@ -279,7 +282,27 @@ def draw_patch_grid_on_geotiff(input, patch_size, overlap_ratio, show_labels=Tru
     plt.show()
 
 
+def load_model(weights_dir):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    model = get_model_instance_segmentation(num_classes=2)
+    model.load_state_dict(
+        torch.load(weights_dir, 
+                   map_location=torch.device(device)))
+    
+    return model
 
 
+def load_image(pil_img):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # convert to tensor
+    img = F.to_tensor(pil_img)
+    # add batch dimension
+    img = img.unsqueeze(0)
+    img.to(device)
+    
+    return img
 
+if __name__ == "__main__":
+    pass
 
