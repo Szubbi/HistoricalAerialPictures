@@ -7,9 +7,10 @@ import torch
 import geopandas as gpd
 
 
-from util import split_geotiff_to_patches, load_image, load_model
+from util import split_geotiff_to_patches, load_image, load_model, try_except
 from rasterio.features import shapes
 from shapely import geometry
+from datetime import datetime
 
 
 def visualize_predictions(image, prediction, threshold=0.5):
@@ -57,28 +58,27 @@ def visualize_predictions(image, prediction, threshold=0.5):
     ax.axis('off')
     plt.tight_layout()
     plt.show()
+ 
     
-if __name__ == "__main__":
-    
-    weight_dir = r"C:\Users\pzu\Documents\01_Projekty\03_HistoricalAerial\exp1_best_model.pth"
-    test_img_dir = r'C:\Users\pzu\Documents\01_Projekty\03_HistoricalAerial\02_TestBW\30_26667_M-34-77-B-b-1-4.tif'
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    MASK_THRESHOLD = 0.5
-    
-    #load model
-    model = load_model(weight_dir)
-    model.eval()
-    model.to(device)
-
-    # test image
-    patches = split_geotiff_to_patches(test_img_dir, 640, 0.25)
-    predictions = {}
-
-    for idx, (image, transform) in enumerate(patches):
-        print(f'\rWorking on: {idx+1}/{len(patches)}', end='', flush=True)
+# Progress bar
+def print_progress_bar(iteration, total, prefix='', suffix='', iter_time = '', length=50):
+    percent = f"{100 * (iteration / float(total)):.1f}"
+    filled_length = int(length * iteration // total)
+    bar = '=' * filled_length + '-' * (length - filled_length)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end='', flush=True)
+    if iteration == total:
+        print()
         
-        img = load_image(image)
 
+def detect_georeferenced_buildings(src_img, model, mask_threshold, patch_size, overlap_ratio):
+    start_time = datetime.now()
+    predictions = {}
+    
+    patches = split_geotiff_to_patches(src_img, patch_size, overlap_ratio)
+    
+    for idx, (image, transform) in enumerate(patches):
+        print_progress_bar(idx+1, len(patches), prefix=f'Patch: {idx+1}')
+        img = load_image(image)
         
         # detect objects
         with torch.no_grad():
@@ -99,8 +99,28 @@ if __name__ == "__main__":
                     "score" : score,
                     "geometry" : geom}
 
-            
     results = gpd.GeoDataFrame.from_dict(predictions, orient='index', crs = 'EPSG:2180')
+    
+    return results
+
+
+        
+if __name__ == "__main__":
+    
+    weight_dir = r"C:\Users\pzu\Documents\01_Projekty\03_HistoricalAerial\exp1_best_model.pth"
+    test_img_dir = r'C:\Users\pzu\Documents\01_Projekty\03_HistoricalAerial\02_TestBW\30_26667_M-34-77-B-b-1-4.tif'
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    MASK_THRESHOLD = 0.5
+    
+    #load model
+    model = load_model(weight_dir)
+    model.eval()
+    model.to(device)
+
+    # test image
+    results = detect_georeferenced_buildings(
+        test_img_dir, model, MASK_THRESHOLD,  640, 0.25)
+
     results.to_file(r'C:\Users\pzu\Documents\01_Projekty\03_HistoricalAerial\results_11.shp')
     #visualize_predictions(img, prediction, MASK_THRESHOLD)
     
