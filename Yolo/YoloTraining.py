@@ -109,7 +109,11 @@ if __name__ == '__main__':
         'box': (0.02, 0.2), # Box loss gain
         'cls': (0.2, 4.0), # Class loss gain
         'obj': (0.2, 4.0), #	Objectness loss gain
-        "degrees": (0.0, 45.0)
+        'seg' : (0.2, 4.0),
+        "beta1": (0.85, 0.95),  # First moment decay
+        "beta2": (0.995, 0.9995),  # Second moment decay
+        "cos_lr": (0, 1),  # 0 = off, 1 = on
+        "dropout": (0.0, 0.3)  # If supported by your model variant
     }
 
     model.tune(

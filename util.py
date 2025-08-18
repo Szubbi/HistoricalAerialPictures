@@ -12,12 +12,16 @@ import xmltodict
 import sqlite3
 import pandas as pd
 import os
-import random
-import matplotlib.pyplot as plt
 import rasterio
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import matplotlib.ticker as ticker
+import torch
 
 from shutil import copy
 from PIL import Image, ImageDraw
+from Mask_RCNN.train_maskrcnn import get_model_instance_segmentation
+from torchvision.transforms import functional as F
 
 
 def read_annotations_xml(xml_dir:str) -> np.array:
@@ -149,37 +153,6 @@ def draw_yolo_polygons_on_pil(image, yolo_text_path):
 
     return img
 
-
-def display_images_and_masks(images, masks, num_pairs=8):
-    """
-    Display grayscale images and their corresponding segmentation masks
-    in a 4x4 grid using matplotlib.
-
-    Parameters:
-    - images: numpy array of shape (N, H, W)
-    - masks: numpy array of shape (N, H, W)
-    - num_pairs: number of image-mask pairs to display (default is 8)
-    """
-    assert len(images) == len(masks), "Images and masks must have the same length"
-    assert num_pairs <= len(images), "Not enough data to sample from"
-
-    indices = random.sample(range(len(images)), num_pairs)
-    fig, axes = plt.subplots(num_pairs // 2, 4, figsize=(12, 12))
-
-    for i in range(num_pairs // 2):
-        for j in range(2):
-            idx = indices[i * 2 + j]
-            axes[i, j * 2].imshow(images[idx], cmap='gray')
-            axes[i, j * 2].axis('off')
-            axes[i, j * 2].set_title("Image")
-
-            axes[i, j * 2 + 1].imshow(masks[idx], cmap='gray')
-            axes[i, j * 2 + 1].axis('off')
-            axes[i, j * 2 + 1].set_title("Mask")
-
-    plt.tight_layout()
-    plt.show()
-    
 def split_geotiff_to_patches(input, patch_size, overlap_ratio):
     if isinstance(input, str):
         with rasterio.open(input) as src:
@@ -195,19 +168,141 @@ def split_geotiff_to_patches(input, patch_size, overlap_ratio):
     step = int(patch_size * (1 - overlap_ratio))
     
     for i in range(0, height, step):
-        if i + patch_size > height:
-            i = height - patch_size
         for j in range(0, width, step):
-            if j + patch_size > width:
-                j = width - patch_size
-
             patch = img[i:i+patch_size, j:j+patch_size]
-
+            if patch.shape[0] < patch_size or patch.shape[1] < patch_size:
+                # Handle the last row/column patches
+                patch = img[max(0, height-patch_size):height, max(0, width-patch_size):width]
+            
+            # Calculate the transform for the patch
             patch_transform = rasterio.transform.Affine(
                 transform.a, transform.b, transform.c + j * transform.a,
                 transform.d, transform.e, transform.f + i * transform.e
             )
-
+            
             patches.append((patch, patch_transform))
 
     return patches
+
+
+
+def draw_patch_grid_on_geotiff(input, patch_size, overlap_ratio, show_labels=True):
+    """
+    Draws a grid overlay on a GeoTIFF image to visualize patch splitting and optionally labels each patch.
+
+    Parameters:
+    - file_path: str, path to the GeoTIFF file
+    - patch_size: int, size of each patch (in pixels)
+    - overlap_ratio: float, overlap ratio between patches (0 to <1)
+    - show_labels: bool, whether to display patch index labels
+    """
+    if isinstance(input, str):
+        with rasterio.open(input) as src:
+            img = src.read(1)
+            height, width = img.shape
+            transform = src.transform
+            
+    if isinstance(input, tuple):
+        img, transform = input
+        height, width = img.shape
+
+    step = int(patch_size * (1 - overlap_ratio))
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.imshow(img, cmap='gray')
+    
+    print('Calculating grid postitions')
+    # Calculate grid positions
+    x_positions = []
+    for j in range(0, width, step):
+        if j + patch_size > width:
+            j = width - patch_size
+            x_positions.append(j)
+            x_positions.append(width)
+        else:
+            x_positions.append(j)
+            x_positions.append(j + patch_size)
+            
+    x_positions = sorted(set(x_positions))
+    
+    y_positions = []
+    for i in range(0, height, step):
+        if i + patch_size > height:
+            i = height - patch_size
+            y_positions.append(i)
+            y_positions.append(height)
+        else:
+            y_positions.append(i)
+            y_positions.append(i + patch_size)
+            
+    y_positions = sorted(set(y_positions))
+
+
+    # Draw grid lines
+    for x in x_positions:
+        ax.axvline(x=x, color='red', linestyle='--', linewidth=0.5)
+    ax.axvline(x=width, color='red', linestyle='--', linewidth=0.5)
+
+    for y in y_positions:
+        ax.axhline(y=y, color='red', linestyle='--', linewidth=0.5)
+    ax.axhline(y=height, color='red', linestyle='--', linewidth=0.5)
+
+    # Add labels if requested
+    print("drawing labels")
+    if show_labels:
+        patch_index = 0
+        for i in range(0, height, step):
+            for j in range(0, width, step):
+                center_x = j + patch_size / 2
+                center_y = i + patch_size / 2
+                if center_x < width and center_y < height:
+                    ax.text(center_x, center_y, str(patch_index),
+                            color='yellow', fontsize=6, weight='bold',
+                            ha='center', va='center')
+                elif center_x < width and center_y > height:
+                    ax.text(center_x, i, str(patch_index),
+                            color='yellow', fontsize=6, weight='bold',
+                            ha='center', va='center')
+                elif center_x > width and center_y < height:
+                    ax.text(j, center_y, str(patch_index),
+                            color='yellow', fontsize=6, weight='bold',
+                            ha='center', va='center')
+                else:
+                    ax.text(j, i, str(patch_index),
+                            color='yellow', fontsize=6, weight='bold',
+                            ha='center', va='center')
+                patch_index += 1
+
+    ax.set_title("Patch Grid" + (" with Labels" if show_labels else ""))
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(500))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(500))
+    ax.set_xlim(0, width)
+    ax.set_ylim(height, 0)
+    plt.tight_layout()
+    plt.show()
+
+
+def load_model(weights_dir):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    model = get_model_instance_segmentation(num_classes=2)
+    model.load_state_dict(
+        torch.load(weights_dir, 
+                   map_location=torch.device(device)))
+    
+    return model
+
+
+def load_image(pil_img):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # convert to tensor
+    img = F.to_tensor(pil_img)
+    # add batch dimension
+    img = img.unsqueeze(0)
+    img.to(device)
+    
+    return img
+
+if __name__ == "__main__":
+    pass
+
