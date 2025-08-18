@@ -303,6 +303,15 @@ def load_image(pil_img):
     
     return img
 
+# Progress bar
+def print_progress_bar(iteration, total, prefix='', suffix='', iter_time = '', length=50):
+    percent = f"{100 * (iteration / float(total)):.1f}"
+    filled_length = int(length * iteration // total)
+    bar = '=' * filled_length + '-' * (length - filled_length)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end='', flush=True)
+    if iteration == total:
+        print()
+
 if __name__ == "__main__":
     pass
 
