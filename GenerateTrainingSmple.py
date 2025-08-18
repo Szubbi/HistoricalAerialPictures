@@ -451,26 +451,29 @@ def check_imgs_labels(dataset_dir, split):
         print('All imgs has matching labels')
 
 
-def display_labels(pil_images, binary_labels, yolo_labels):
+def display_labels(pil_images, binary_labels, yolo_labels, maskrcnn_masks):
     """
-    Display 8 PIL images with YOLO predictions and ground truth polygon annotations.
+    Display 8 PIL images with YOLO predictions, binary masks, YOLO polygon annotations,
+    and Mask R-CNN instance masks.
 
     Parameters:
     - pil_images: list of 8 PIL.Image objects
-    - binary_labels: list of 8 binary labels
+    - binary_labels: list of 8 binary mask arrays (H, W) with instance IDs
     - yolo_labels: list of 8 strings, each containing YOLO polygon annotations
+    - maskrcnn_masks: list of 8 PIL.Image objects representing Mask R-CNN instance masks
     """
-    assert len(pil_images) == len(binary_labels) == len(yolo_labels) == 8, "All input lists must have 8 elements."
+    assert len(pil_images) == len(binary_labels) == len(yolo_labels) == len(maskrcnn_masks) == 8, \
+        "All input lists must have 8 elements."
 
-    fig, axes = plt.subplots(8, 3, figsize=(15, 30))
+    fig, axes = plt.subplots(8, 4, figsize=(20, 30))
     for i in range(8):
         # Original image
         axes[i, 0].imshow(pil_images[i].convert('L'), cmap='gray')
         axes[i, 0].set_title(f'Image {i+1}')
         axes[i, 0].axis('off')
 
-        # YOLO prediction overlay
-        axes[i, 1].imshow(binary_labels[i])
+        # Binary mask
+        axes[i, 1].imshow(binary_labels[i], cmap='gray')
         axes[i, 1].set_title(f'Binary label {i+1}')
         axes[i, 1].axis('off')
 
@@ -480,8 +483,24 @@ def display_labels(pil_images, binary_labels, yolo_labels):
         axes[i, 2].set_title(f'Yolo label {i+1}')
         axes[i, 2].axis('off')
 
+        # Mask R-CNN instance mask with different colors
+        instance_mask = np.array(maskrcnn_masks[i])
+        color_mask = np.zeros((*instance_mask.shape, 3), dtype=np.uint8)
+        unique_ids = np.unique(instance_mask)
+        np.random.seed(42)
+        for uid in unique_ids:
+            if uid == 0:
+                continue
+            color = np.random.randint(0, 255, size=3)
+            color_mask[instance_mask == uid] = color
+        axes[i, 3].imshow(color_mask)
+        axes[i, 3].set_title(f'Mask R-CNN mask {i+1}')
+        axes[i, 3].axis('off')
+
     plt.tight_layout()
     plt.show()
+
+
        
 if __name__ == "__main__":
     pass

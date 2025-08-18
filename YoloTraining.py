@@ -113,10 +113,11 @@ if __name__ == '__main__':
     }
 
     model.tune(
-        data='/home/pszubert/Dokumenty/04_ConvDataset/YOLO_Dataset.yaml', 
+        data='/home/pszubert/Dokumenty/04_ConvDataset/YOLO_HPO_Dataset.yaml', 
         imgsz=640,
-        epochs=20,
-        iterations=100,
+        batch=40,
+        epochs=15,
+        iterations=50,
         optimizer='AdamW',
         plots=True,
         project='/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/12_YOLO_Training/HPO'

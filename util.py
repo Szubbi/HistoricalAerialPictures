@@ -12,6 +12,9 @@ import xmltodict
 import sqlite3
 import pandas as pd
 import os
+import random
+import matplotlib.pyplot as plt
+import rasterio
 
 from shutil import copy
 from PIL import Image, ImageDraw
@@ -145,3 +148,66 @@ def draw_yolo_polygons_on_pil(image, yolo_text_path):
             draw.polygon(points, outline="red", width=4)
 
     return img
+
+
+def display_images_and_masks(images, masks, num_pairs=8):
+    """
+    Display grayscale images and their corresponding segmentation masks
+    in a 4x4 grid using matplotlib.
+
+    Parameters:
+    - images: numpy array of shape (N, H, W)
+    - masks: numpy array of shape (N, H, W)
+    - num_pairs: number of image-mask pairs to display (default is 8)
+    """
+    assert len(images) == len(masks), "Images and masks must have the same length"
+    assert num_pairs <= len(images), "Not enough data to sample from"
+
+    indices = random.sample(range(len(images)), num_pairs)
+    fig, axes = plt.subplots(num_pairs // 2, 4, figsize=(12, 12))
+
+    for i in range(num_pairs // 2):
+        for j in range(2):
+            idx = indices[i * 2 + j]
+            axes[i, j * 2].imshow(images[idx], cmap='gray')
+            axes[i, j * 2].axis('off')
+            axes[i, j * 2].set_title("Image")
+
+            axes[i, j * 2 + 1].imshow(masks[idx], cmap='gray')
+            axes[i, j * 2 + 1].axis('off')
+            axes[i, j * 2 + 1].set_title("Mask")
+
+    plt.tight_layout()
+    plt.show()
+    
+def split_geotiff_to_patches(input, patch_size, overlap_ratio):
+    if isinstance(input, str):
+        with rasterio.open(input) as src:
+            img = src.read(1)
+            height, width = img.shape
+            transform = src.transform
+            
+    if isinstance(input, tuple):
+        img, transform = input
+        height, width = img.shape
+    
+    patches = []
+    step = int(patch_size * (1 - overlap_ratio))
+    
+    for i in range(0, height, step):
+        if i + patch_size > height:
+            i = height - patch_size
+        for j in range(0, width, step):
+            if j + patch_size > width:
+                j = width - patch_size
+
+            patch = img[i:i+patch_size, j:j+patch_size]
+
+            patch_transform = rasterio.transform.Affine(
+                transform.a, transform.b, transform.c + j * transform.a,
+                transform.d, transform.e, transform.f + i * transform.e
+            )
+
+            patches.append((patch, patch_transform))
+
+    return patches
