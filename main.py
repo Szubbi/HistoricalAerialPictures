@@ -21,6 +21,7 @@ from shutil import copy
 from datetime import datetime
 from PIL import Image
 from random import choices
+from shutil import copy
 
 if __name__ == "__main__":
     working_dir = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec'
@@ -321,15 +322,106 @@ if __name__ == "__main__":
     show_eight_random(dataset_dir, split)
         
     
+    ############################################################################
+    #                  Creating small training sample for HPO                  # 
+    ############################################################################
+    dataset_null = [(label, cat) for label, cat in zip(yolo_labels, cat) if cat == 0]
+    dataset_notNull = [(label, cat) for label, cat in zip(yolo_labels, cat) if cat != 0]
+    
+    dataset_less_nulls = dataset_null[:int(len(dataset_null)/10)] + dataset_notNull 
+    labels, cats = [label for label, cat in dataset_less_nulls], [cat for label, cat in dataset_less_nulls]
+    
+    classifier = KBinsDiscretizer(
+        n_bins=6, encode='ordinal', strategy='kmeans')
+    classifier.fit(np.array(cats).reshape(-1,1))
+    
+    bins = classifier.bin_edges_[0].tolist()
+    print(bins)
+    classes = classifier.transform(np.array(cats).reshape(-1,1)).reshape(-1)
+    
+    X, X_other, y, y_other = train_test_split(
+        labels, classes, stratify=classes, test_size=0.05) 
+    
+    X_HPO, X_HPO_val, y_HPO, y_HPO_val = train_test_split(
+        X_other, y_other, stratify=y_other, test_size=0.2)
+    
+    # Move files to destination                
+    DATASET_DIR = '/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/05_HPO_dataset'
+    yolo_dir = '/home/pszubert/Dokumenty/04_ConvDataset/labels'
+    labels_dir = '/home/pszubert/Dokumenty/04_ConvDataset/binary_labels'
+    mask_labels_dir = '/home/pszubert/Dokumenty/04_ConvDataset/maskrcnn_labels'
+    images_dir = '/home/pszubert/Dokumenty/04_ConvDataset/images'
+    
+    def list_files(search_dir, suffix):
+        result = {}
+        for root, dirs, files in os.walk(search_dir):
+            for file in files:
+                if file.endswith(suffix):
+                    result[file] = os.path.join(root, file)
+                    
+        return result
     
     
-a = np.array(mask_labels[2])
-a.shape
-    
-a = Image.open()    
+    binary_labels = list_files(labels_dir, '.png')
+    mask_labels = list_files(mask_labels_dir, '.png')
+    yolo_labels = list_files(yolo_dir, '.txt')
+    images = list_files(images_dir, '.png')
     
 
+    copy_dict = {
+        'train': X_HPO,
+        'val': X_HPO_val
+    }
+    
+    for split, dataset in copy_dict.items():
+        binary_dst = os.path.join(DATASET_DIR, 'binary_labels', split)
+        yolo_dst = os.path.join(DATASET_DIR, 'labels', split)
+        mask_dst = os.path.join(DATASET_DIR, 'maskrcnn_labels', split)
+        images_dst = os.path.join(DATASET_DIR, 'images', split)
+        
+        #create path if don't exist
+        for dst in [binary_dst, yolo_dst, mask_dst, images_dst]:
+            if not os.path.exists(dst):
+                os.makedirs(dst)
+                
+        for idx, patch in enumerate(dataset):
+            print_progress_bar(idx+1, len(dataset), suffix=split)
+            
+            img_nme = patch.replace('.txt', '.png')
 
+            img_src_dir = images[img_nme]
+            lbl_src_dir = binary_labels[img_nme]
+            yolo_src_dir = yolo_labels[patch]
+            mask_src_dir = mask_labels[img_nme]
+
+
+            # move binary label
+            """
+            if not os.path.isfile(os.path.join(binary_dst, img_nme)):
+                copy(lbl_src_dir, binary_dst)
+            # move yolo label
+            if not os.path.isfile(os.path.join(yolo_dst, patch)):
+                copy(yolo_src_dir, yolo_dst)
+            # move img
+            if not os.path.isfile(os.path.join(images_dst, img_nme)):
+                copy(img_src_dir, images_dst)""" 
+            # move img
+            if not os.path.isfile(os.path.join(mask_dst, img_nme)):
+                copy(mask_src_dir, mask_dst) 
+                
+        print('Done') 
+
+                    
+            
+        # check if all went well
+        binary_labels = list_files(binary_dst, '.png')
+        mask_labels = list_files(mask_dst, '.png')
+        yolo_labels = list_files(yolo_dst, '.txt')
+        images = list_files(images_dst, '.png')            
+            
+        assert len(binary_labels) == len(images) == len(yolo_labels), 'Len do not match'
+
+        show_eight_random(DATASET_DIR, 'val')
           
         
       
