@@ -4,6 +4,7 @@ from torchvision.models.detection import maskrcnn_resnet50_fpn
 from torchvision.models.detection.transform import GeneralizedRCNNTransform
 from torchvision.transforms import functional as F
 from torch.utils.data import Dataset, DataLoader
+from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 import numpy as np
 import os
 from PIL import Image
@@ -210,10 +211,10 @@ def validate_with_logging(model, data_loader, device, epoch, logger):
 def run_experiments(train_dataset, val_dataset, device, log_dir, num_epochs=50):
     os.makedirs(log_dir, exist_ok=True)
     hyperparams = {
-        "exp1": {"lr": 0.005, "momentum": 0.9, "weight_decay": 0.0005},
-        "exp2": {"lr": 0.001, "momentum": 0.9, "weight_decay": 0.0001},
-        "exp3": {"lr": 0.01, "momentum": 0.85, "weight_decay": 0.0005},
-        "exp4": {"lr": 0.003, "momentum": 0.95, "weight_decay": 0.001}
+        "exp1": {"lr": 0.005, "momentum": 0.9, "weight_decay": 0.0005, "scheduler": "StepLR", "step_size": 10, "gamma": 0.1},
+        "exp2": {"lr": 0.001, "momentum": 0.9, "weight_decay": 0.0001, "scheduler": "ReduceLROnPlateau", "patience": 3, "factor": 0.5},
+        "exp3": {"lr": 0.01, "momentum": 0.85, "weight_decay": 0.0005},  # No scheduler
+        "exp4": {"lr": 0.003, "momentum": 0.95, "weight_decay": 0.001}   # No scheduler
     }
 
     for exp_name, params in hyperparams.items():
@@ -226,16 +227,30 @@ def run_experiments(train_dataset, val_dataset, device, log_dir, num_epochs=50):
         model = get_model_instance_segmentation(num_classes=2).to(device)
         optimizer = torch.optim.SGD(model.parameters(), lr=params["lr"], momentum=params["momentum"], weight_decay=params["weight_decay"])
 
+        # Instantiate scheduler if specified
+        scheduler = None
+        if "scheduler" in params:
+            if params["scheduler"] == "StepLR":
+                scheduler = StepLR(optimizer, step_size=params.get("step_size", 10), gamma=params.get("gamma", 0.1))
+            elif params["scheduler"] == "ReduceLROnPlateau":
+                scheduler = ReduceLROnPlateau(optimizer, mode='max', patience=params.get("patience", 3), factor=params.get("factor", 0.5))
+
         train_loader = DataLoader(train_dataset, batch_size=5, shuffle=True, collate_fn=lambda x: tuple(zip(*x)))
         val_loader = DataLoader(val_dataset, batch_size=5, shuffle=False, collate_fn=lambda x: tuple(zip(*x)))
 
         best_iou = 0.0
         patience = 5
         patience_counter = 0
-
         for epoch in range(1, num_epochs + 1):
             train_one_epoch_with_progress(model, optimizer, train_loader, device, epoch, logger)
             iou, dice, acc = validate_with_logging(model, val_loader, device, epoch, logger)
+
+            # Step the scheduler
+            if scheduler:
+                if isinstance(scheduler, ReduceLROnPlateau):
+                    scheduler.step(iou)
+                else:
+                    scheduler.step()
 
             if iou > best_iou:
                 best_iou = iou
@@ -251,10 +266,10 @@ def run_experiments(train_dataset, val_dataset, device, log_dir, num_epochs=50):
 
 
 if __name__ == "__main__":
-    train_image_dir = "/path/to/train/images"
-    train_mask_dir = "/path/to/train/masks"
-    val_image_dir = "/path/to/val/images"
-    val_mask_dir = "/path/to/val/masks"
+    train_image_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/05_BW_Dataset/06_HPODataset/images/train"
+    train_mask_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/05_BW_Dataset/06_HPODataset/MaskRCNN/train_HPO"
+    val_image_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/05_BW_Dataset/06_HPODataset/images/val"
+    val_mask_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/05_BW_Dataset/06_HPODataset/MaskRCNN/val_HPO"
 
     if torch.cuda.is_available():
         print("GPU is available for training.")
