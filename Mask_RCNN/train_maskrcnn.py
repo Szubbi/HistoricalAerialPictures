@@ -12,6 +12,17 @@ from datetime import datetime
 from collections import defaultdict
 import time
 
+
+# Progress bar function 
+def print_progress_bar(iteration, total, prefix='', suffix='', length=50):
+    percent = f"{100 * (iteration / float(total)):.1f}"
+    filled_length = int(length * iteration // total)
+    bar = '=' * filled_length + '-' * (length - filled_length)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end='', flush=True)
+    if iteration == total:
+        print()
+
+
 # Dataset class
 class GrayscaleMaskRCNNDataset(Dataset):
     def __init__(self, image_dir, mask_dir):
@@ -19,57 +30,66 @@ class GrayscaleMaskRCNNDataset(Dataset):
         self.mask_dir = mask_dir
         self.image_files = sorted(os.listdir(image_dir))
         self.mask_files = sorted(os.listdir(mask_dir))
+        self.images = []
+        self.targets = []
 
-    def __getitem__(self, idx):
-        img_path = os.path.join(self.image_dir, self.image_files[idx])
-        mask_path = os.path.join(self.mask_dir, self.mask_files[idx])
+        total = len(self.image_files)
+        print("Loading dataset into RAM:")
+        for idx in range(total):
+            img_path = os.path.join(self.image_dir, self.image_files[idx])
+            mask_path = os.path.join(self.mask_dir, self.mask_files[idx])
 
-        img = Image.open(img_path).convert("L")
-        mask = Image.open(mask_path)
+            img = Image.open(img_path).convert("L")
+            mask = Image.open(mask_path)
 
-        img = F.to_tensor(img)
-        mask = np.array(mask)
+            img_tensor = F.to_tensor(img)
+            mask_np = np.array(mask)
 
-        obj_ids = np.unique(mask)
-        obj_ids = obj_ids[obj_ids != 0]
+            obj_ids = np.unique(mask_np)
+            obj_ids = obj_ids[obj_ids != 0]
 
-        if len(obj_ids) == 0:
-            return self.__getitem__((idx + 1) % len(self))
-
-        masks = mask == obj_ids[:, None, None]
-
-        valid_boxes = []
-        valid_masks = []
-
-        for i, m in enumerate(masks):
-            pos = np.where(m)
-            xmin, xmax = np.min(pos[1]), np.max(pos[1])
-            ymin, ymax = np.min(pos[0]), np.max(pos[0])
-
-            if xmax <= xmin or ymax <= ymin:
+            if len(obj_ids) == 0:
                 continue
 
-            valid_boxes.append([xmin, ymin, xmax, ymax])
-            valid_masks.append(m)
+            masks = mask_np == obj_ids[:, None, None]
 
-        if len(valid_boxes) == 0:
-            return self.__getitem__((idx + 1) % len(self))
+            valid_boxes = []
+            valid_masks = []
 
-        boxes = torch.as_tensor(valid_boxes, dtype=torch.float32)
-        labels = torch.ones((len(valid_boxes),), dtype=torch.int64)
-        masks = torch.as_tensor(valid_masks, dtype=torch.uint8)
+            for m in masks:
+                pos = np.where(m)
+                if pos[0].size == 0 or pos[1].size == 0:
+                    continue
+                xmin, xmax = np.min(pos[1]), np.max(pos[1])
+                ymin, ymax = np.min(pos[0]), np.max(pos[0])
+                if xmax <= xmin or ymax <= ymin:
+                    continue
+                valid_boxes.append([xmin, ymin, xmax, ymax])
+                valid_masks.append(m)
 
-        target = {
-            "boxes": boxes,
-            "labels": labels,
-            "masks": masks,
-            "image_id": torch.tensor([idx])
-        }
+            if len(valid_boxes) == 0:
+                continue
+            boxes = torch.as_tensor(valid_boxes, dtype=torch.float32)
+            labels = torch.ones((len(valid_boxes),), dtype=torch.int64)
+            masks_tensor = torch.as_tensor(valid_masks, dtype=torch.uint8)
 
-        return img, target
+            target = {
+                "boxes": boxes,
+                "labels": labels,
+                "masks": masks_tensor,
+                "image_id": torch.tensor([idx])
+            }
+
+            self.images.append(img_tensor)
+            self.targets.append(target)
+
+            print_progress_bar(idx + 1, total, prefix='Loading', suffix='Complete')
+
+    def __getitem__(self, idx):
+        return self.images[idx], self.targets[idx]
 
     def __len__(self):
-        return len(self.image_files)
+        return len(self.images)
 
 # Model setup
 def get_model_instance_segmentation(num_classes):
@@ -109,17 +129,8 @@ def compute_pixel_accuracy(pred_mask, true_mask):
     total = true_mask.numel()
     return correct / total
 
-# Progress bar
-def print_progress_bar(iteration, total, prefix='', suffix='', length=50):
-    percent = f"{100 * (iteration / float(total)):.1f}"
-    filled_length = int(length * iteration // total)
-    bar = '=' * filled_length + '-' * (length - filled_length)
-    print(f'{prefix} |{bar}| {percent}% {suffix}', end='')
-    if iteration == total:
-        print()
 
-# Training loop with progress bar
-
+# Training loop 
 def train_one_epoch_with_progress(model, optimizer, data_loader, device, epoch, logger):
     model.train()
     total = len(data_loader)
@@ -157,6 +168,7 @@ def train_one_epoch_with_progress(model, optimizer, data_loader, device, epoch, 
 
     logger.info(f"Epoch {epoch}, Batch {i+1}/{total}, Loss: {losses.item():.4f}")
     print_progress_bar(i + 1, total, prefix=f"Epoch {epoch}", suffix="Complete")
+
 
 # Validation with logging
 def validate_with_logging(model, data_loader, device, epoch, logger):
@@ -237,11 +249,19 @@ def run_experiments(train_dataset, val_dataset, device, log_dir, num_epochs=50):
                     logger.info("Early stopping triggered.")
                     break
 
+
 if __name__ == "__main__":
     train_image_dir = "/path/to/train/images"
     train_mask_dir = "/path/to/train/masks"
     val_image_dir = "/path/to/val/images"
     val_mask_dir = "/path/to/val/masks"
+
+    if torch.cuda.is_available():
+        print("GPU is available for training.")
+        print(f"Using device: {torch.cuda.get_device_name(0)}")
+    else:
+        print("❌ GPU is not available")
+        
 
     train_dataset = GrayscaleMaskRCNNDataset(train_image_dir, train_mask_dir)
     val_dataset = GrayscaleMaskRCNNDataset(val_image_dir, val_mask_dir)
