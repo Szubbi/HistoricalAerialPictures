@@ -29,8 +29,8 @@ class GrayscaleMaskRCNNDataset(Dataset):
     def __init__(self, image_dir, mask_dir):
         self.image_dir = image_dir
         self.mask_dir = mask_dir
-        self.image_files = sorted(os.listdir(image_dir))
-        self.mask_files = sorted(os.listdir(mask_dir))
+        self.image_files = sorted([_ for _ in os.listdir(image_dir) if _.endswith(('.png'))])
+        self.mask_files = sorted([_ for _ in os.listdir(mask_dir) if _.endswith(('.png'))])
         self.images = []
         self.targets = []
 
@@ -72,7 +72,7 @@ class GrayscaleMaskRCNNDataset(Dataset):
                 continue
             boxes = torch.as_tensor(valid_boxes, dtype=torch.float32)
             labels = torch.ones((len(valid_boxes),), dtype=torch.int64)
-            masks_tensor = torch.as_tensor(valid_masks, dtype=torch.uint8)
+            masks_tensor = torch.as_tensor(np.array(valid_masks), dtype=torch.uint8)
 
             target = {
                 "boxes": boxes,
@@ -150,13 +150,9 @@ def train_one_epoch_with_progress(model, optimizer, data_loader, device, epoch, 
 
         batch_time = time.time() - start_batch
         logger.info(f"Epoch {epoch}, Batch {i+1}/{total}, Loss: {losses.item():.4f}, Time: {batch_time:.2f}s")
+        print_progress_bar(i + 1, total, prefix=f"Epoch {epoch}", suffix="Complete")
 
-        percent = f"{100 * (i + 1) / float(total):.1f}"
-        filled_length = int(50 * (i + 1) // total)
-        bar = '=' * filled_length + '-' * (50 - filled_length)
-        print(f"Epoch {epoch} |{bar}| {percent}% Loss: {losses.item():.4f} Time: {batch_time:.2f}s", end='')
 
-    print()
     epoch_time = time.time() - start_epoch
     logger.info(f"Epoch {epoch} completed in {epoch_time:.2f} seconds.")
 
@@ -211,10 +207,54 @@ def validate_with_logging(model, data_loader, device, epoch, logger):
 def run_experiments(train_dataset, val_dataset, device, log_dir, num_epochs=50):
     os.makedirs(log_dir, exist_ok=True)
     hyperparams = {
-        "exp1": {"lr": 0.005, "momentum": 0.9, "weight_decay": 0.0005, "scheduler": "StepLR", "step_size": 10, "gamma": 0.1},
-        "exp2": {"lr": 0.001, "momentum": 0.9, "weight_decay": 0.0001, "scheduler": "ReduceLROnPlateau", "patience": 3, "factor": 0.5},
-        "exp3": {"lr": 0.01, "momentum": 0.85, "weight_decay": 0.0005},  # No scheduler
-        "exp4": {"lr": 0.003, "momentum": 0.95, "weight_decay": 0.001}   # No scheduler
+        "exp3_1": {
+            "lr": 0.00005,  # Lower learning rate
+            "momentum": 0.9,
+            "weight_decay": 0.0005,
+            "scheduler": "ReduceLROnPlateau",
+            "patience": 25,  # Longer patience
+            "factor": 0.5
+        },
+        "exp3_2": {
+            "lr": 0.00001,  # Even lower learning rate
+            "momentum": 0.9,
+            "weight_decay": 0.0005,
+            "scheduler": "ReduceLROnPlateau",
+            "patience": 25,
+            "factor": 0.5
+        },
+        "exp3_3": {
+            "lr": 0.0001,
+            "momentum": 0.95,  # Higher momentum
+            "weight_decay": 0.001,  # More regularization
+            "scheduler": "ReduceLROnPlateau",
+            "patience": 25,
+            "factor": 0.5
+        },
+        "exp3_4": {
+            "lr": 0.00005,
+            "momentum": 0.85,  # Lower momentum
+            "weight_decay": 0.0001,  # Less regularization
+            "scheduler": "ReduceLROnPlateau",
+            "patience": 25,
+            "factor": 0.5
+        },
+        "exp3_5": {
+            "lr": 0.00005,
+            "momentum": 0.9,
+            "weight_decay": 0.0005,
+            "scheduler": "StepLR",
+            "step_size": 25,  # Shorter step size
+            "gamma": 0.2
+        },
+        "exp3_6": {
+            "lr": 0.00005,
+            "momentum": 0.9,
+            "weight_decay": 0.0005,
+            "scheduler": "StepLR",
+            "step_size": 25,  # Longer step size
+            "gamma": 0.1
+        }
     }
 
     for exp_name, params in hyperparams.items():
@@ -255,7 +295,7 @@ def run_experiments(train_dataset, val_dataset, device, log_dir, num_epochs=50):
             if iou > best_iou:
                 best_iou = iou
                 patience_counter = 0
-                torch.save(model.state_dict(), f"{exp_name}_best_model.pth")
+                torch.save(model.state_dict(), os.path.join(log_dir, f"{exp_name}_best_model.pth"))
                 logger.info(f"New best model saved with IoU: {best_iou:.4f}")
             else:
                 patience_counter += 1
@@ -267,9 +307,10 @@ def run_experiments(train_dataset, val_dataset, device, log_dir, num_epochs=50):
 
 if __name__ == "__main__":
     train_image_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/05_BW_Dataset/06_HPODataset/images/train"
-    train_mask_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/05_BW_Dataset/06_HPODataset/MaskRCNN/train_HPO"
+    train_mask_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/05_BW_Dataset/06_HPODataset/MaskRCNN/train"
     val_image_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/05_BW_Dataset/06_HPODataset/images/val"
-    val_mask_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/05_BW_Dataset/06_HPODataset/MaskRCNN/val_HPO"
+    val_mask_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/05_Data/05_BW_Dataset/06_HPODataset/MaskRCNN/val"
+    log_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/13_MaskRcnn_Training/HPO"
 
     if torch.cuda.is_available():
         print("GPU is available for training.")
@@ -282,4 +323,4 @@ if __name__ == "__main__":
     val_dataset = GrayscaleMaskRCNNDataset(val_image_dir, val_mask_dir)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    run_experiments(train_dataset, val_dataset, device)
+    run_experiments(train_dataset, val_dataset, device, log_dir, num_epochs=100)
