@@ -188,20 +188,68 @@ def get_model_instance_segmentation(num_classes):
     return model
 
 # Metrics
+# Three below works fine only in binary segmentation case
 def compute_iou(pred_mask, true_mask):
+    pred_mask = pred_mask.bool()
+    true_mask = true_mask.bool()
     intersection = (pred_mask & true_mask).sum().item()
     union = (pred_mask | true_mask).sum().item()
     return intersection / union if union != 0 else 1.0
 
 def compute_dice(pred_mask, true_mask):
+    pred_mask = pred_mask.bool()
+    true_mask = true_mask.bool()
     intersection = (pred_mask & true_mask).sum().item()
     total = pred_mask.sum().item() + true_mask.sum().item()
     return 2 * intersection / total if total != 0 else 1.0
 
 def compute_pixel_accuracy(pred_mask, true_mask):
+    pred_mask = pred_mask.bool()
+    true_mask = true_mask.bool()
     correct = (pred_mask == true_mask).sum().item()
     total = true_mask.numel()
     return correct / total
+
+# this one is for instance segmentation mAP
+def compute_map(outputs, targets, iou_threshold=0.5):
+    """
+    Compute mean Average Precision (mAP) for a batch of predictions and targets.
+    Args:
+        outputs: list of dicts from Mask R-CNN (each dict has 'masks', 'scores')
+        targets: list of dicts (each dict has 'masks')
+        iou_threshold: IoU threshold for a positive match
+    Returns:
+        mAP: float
+    """
+    aps = []
+    for output, target in zip(outputs, targets):
+        pred_masks = output['masks'].detach().cpu() > 0.5  # [N_pred, 1, H, W]
+        pred_scores = output['scores'].detach().cpu() if 'scores' in output else torch.ones(len(output['masks']))
+        gt_masks = target['masks'].detach().cpu() > 0.5     # [N_gt, H, W]
+        if pred_masks.ndim == 4:
+            pred_masks = pred_masks.squeeze(1)
+        matched_gt = set()
+        tp, fp = 0, 0
+        for i, pmask in enumerate(pred_masks):
+            best_iou = 0
+            best_gt = -1
+            for j, gtmask in enumerate(gt_masks):
+                if j in matched_gt:
+                    continue
+                iou = compute_iou(pmask, gtmask)
+                if iou > best_iou:
+                    best_iou = iou
+                    best_gt = j
+            if best_iou >= iou_threshold:
+                tp += 1
+                matched_gt.add(best_gt)
+            else:
+                fp += 1
+        fn = len(gt_masks) - len(matched_gt)
+        precision = tp / (tp + fp + 1e-6) if (tp + fp) > 0 else 0.0
+        aps.append(precision)
+    return float(np.mean(aps)) if aps else 0.0
+
 
 
 # Training loop 
@@ -237,7 +285,6 @@ def train_one_epoch_with_progress(model, optimizer, data_loader, device, epoch, 
     optimizer.step()
 
     logger.info(f"Epoch {epoch}, Batch {i+1}/{total}, Loss: {losses.item():.4f}")
-    print_progress_bar(i + 1, total, prefix=f"Epoch {epoch}", suffix="Complete")
 
 
 # Validation with logging
@@ -246,35 +293,39 @@ def validate_with_logging(model, data_loader, device, epoch, logger):
     iou_scores = []
     dice_scores = []
     pixel_accuracies = []
-
+    map_scores = []
     with torch.no_grad():
         for images, targets in data_loader:
             images = list(img.to(device) for img in images)
             targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-
             outputs = model(images)
 
+            # simple metrics
             for output, target in zip(outputs, targets):
                 if len(output["masks"]) == 0:
                     continue
 
                 pred_mask = output["masks"][0, 0] > 0.5
                 true_mask = target["masks"][0] > 0.5
-
                 iou = compute_iou(pred_mask, true_mask)
                 dice = compute_dice(pred_mask, true_mask)
                 acc = compute_pixel_accuracy(pred_mask, true_mask)
-
                 iou_scores.append(iou)
                 dice_scores.append(dice)
                 pixel_accuracies.append(acc)
 
+            # New mAP metric
+            map_score = compute_map(outputs, targets)
+            map_scores.append(map_score)
+
     mean_iou = np.mean(iou_scores) if iou_scores else 0.0
     mean_dice = np.mean(dice_scores) if dice_scores else 0.0
     mean_accuracy = np.mean(pixel_accuracies) if pixel_accuracies else 0.0
+    mean_map = np.mean(map_scores) if map_scores else 0.0
+    logger.info(f"Epoch {epoch}, Validation - IoU: {mean_iou:.4f}, Dice: {mean_dice:.4f}, Accuracy: {mean_accuracy:.4f}, mAP: {mean_map:.4f}")
 
-    logger.info(f"Epoch {epoch}, Validation - IoU: {mean_iou:.4f}, Dice: {mean_dice:.4f}, Accuracy: {mean_accuracy:.4f}")
-    return mean_iou, mean_dice, mean_accuracy
+    return mean_iou, mean_dice, mean_accuracy, mean_map
+
 
 # data loader filter for corrupted files
 def collate_fn(batch):
@@ -287,54 +338,57 @@ def collate_fn(batch):
 def run_experiments(train_dataset, val_dataset, device, log_dir, num_epochs=50):
     os.makedirs(log_dir, exist_ok=True)
     hyperparams = {
-        "Full_Dataset": {
-            "lr": 0.00005,  # Lower learning rate
+        "Exp1_ReduceLR_Std": {
+            "lr": 0.001,
             "momentum": 0.9,
-            "weight_decay": 0.0005,
+            "weight_decay": 0.0001,
             "scheduler": "ReduceLROnPlateau",
-            "patience": 25,  # Longer patience
+            "patience": 5,
             "factor": 0.5
         },
-        # "exp4_2": {
-        #     "lr": 0.00001,  # Even lower learning rate
-        #     "momentum": 0.9,
-        #     "weight_decay": 0.0005,
-        #     "scheduler": "ReduceLROnPlateau",
-        #     "patience": 25,
-        #     "factor": 0.5
-        # },
-        # "exp4_3": {
-        #     "lr": 0.0001,
-        #     "momentum": 0.95,  # Higher momentum
-        #     "weight_decay": 0.001,  # More regularization
-        #     "scheduler": "ReduceLROnPlateau",
-        #     "patience": 25,
-        #     "factor": 0.5
-        # },
-        # "exp4_4": {
-        #     "lr": 0.0005,
-        #     "momentum": 0.85,  # Lower momentum
-        #     "weight_decay": 0.0001,  # Less regularization
-        #     "scheduler": "ReduceLROnPlateau",
-        #     "patience": 25,
-        #     "factor": 0.5
-        # },
-        # "exp3_5": {
-        #     "lr": 0.00005,
-        #     "momentum": 0.9,
-        #     "weight_decay": 0.0005,
-        #     "scheduler": "StepLR",
-        #     "step_size": 25,  # Shorter step size
-        #     "gamma": 0.2
-        # },
-        # "exp3_6": {
-        #     "lr": 0.00005,
-        #     "momentum": 0.9,
-        #     "weight_decay": 0.0005,
-        #     "scheduler": "StepLR",
-        #     "step_size": 25,  # Longer step size
-        #     "gamma": 0.1
-        # }
+        "Exp2_ReduceLR_LowLR": {
+            "lr": 0.0005,
+            "momentum": 0.9,
+            "weight_decay": 0.0001,
+            "scheduler": "ReduceLROnPlateau",
+            "patience": 5,
+            "factor": 0.5
+        },
+        "Exp3_StepLR_Std": {
+            "lr": 0.001,
+            "momentum": 0.9,
+            "weight_decay": 0.0005,
+            "scheduler": "StepLR",
+            "step_size": 5,
+            "gamma": 0.5,
+            "patience": 5
+        },
+        "Exp4_StepLR_LowLR": {
+            "lr": 0.0005,
+            "momentum": 0.9,
+            "weight_decay": 0.0005,
+            "scheduler": "StepLR",
+            "step_size": 5,
+            "gamma": 0.5,
+            "patience": 5
+        },
+        "Exp5_ReduceLR_HighWD": {
+            "lr": 0.001,
+            "momentum": 0.9,
+            "weight_decay": 0.001,
+            "scheduler": "ReduceLROnPlateau",
+            "patience": 5,
+            "factor": 0.5
+        },
+        "Exp6_StepLR_HighWD": {
+            "lr": 0.001,
+            "momentum": 0.9,
+            "weight_decay": 0.001,
+            "scheduler": "StepLR",
+            "step_size": 5,
+            "gamma": 0.5,
+            "patience": 5
+        }
     }
 
     for exp_name, params in hyperparams.items():
@@ -366,31 +420,30 @@ def run_experiments(train_dataset, val_dataset, device, log_dir, num_epochs=50):
                                 shuffle=False, collate_fn=collate_fn,
                                 pin_memory=True, persistent_workers=True)
 
-        best_iou = 0.0
+        best_map = 0.0
         patience = params['patience']
         patience_counter = 0
         for epoch in range(1, num_epochs + 1):
             train_one_epoch_with_progress(model, optimizer, train_loader, device, epoch, logger)
-            iou, dice, acc = validate_with_logging(model, val_loader, device, epoch, logger)
-
+            iou, dice, acc, map_score = validate_with_logging(model, val_loader, device, epoch, logger)
+            print(f"Epoch {epoch} completed. Validation mAP: {map_score:.4f}")
             # Step the scheduler
             if scheduler:
                 if isinstance(scheduler, ReduceLROnPlateau):
-                    scheduler.step(iou)
+                    scheduler.step(map_score)  # Use mAP instead of IoU
                 else:
                     scheduler.step()
-
-            if iou > best_iou:
-                best_iou = iou
+            if map_score > best_map:
+                best_map = map_score
                 patience_counter = 0
                 torch.save(model.state_dict(), os.path.join(log_dir, f"{exp_name}_best_model.pth"))
-                logger.info(f"New best model saved with IoU: {best_iou:.4f}")
+                logger.info(f"New best model saved with mAP: {best_map:.4f}")
             else:
                 patience_counter += 1
                 logger.info(f"No improvement. Patience counter: {patience_counter}/{patience}")
-                if patience_counter >= patience:
-                    logger.info("Early stopping triggered.")
-                    break
+            if patience_counter >= patience:
+                logger.info("Early stopping triggered.")
+
                 
 
 
@@ -434,21 +487,22 @@ def show_random_samples(dataset, num_samples=4):
 
 
 if __name__ == "__main__":
-    train_image_dir = "/home/pszubert/Dokumenty/05_FullDatasetSplit/images/train"
-    train_mask_dir = "/home/pszubert/Dokumenty/05_FullDatasetSplit/MaskRCNN_labels/train"
-    val_image_dir = "/home/pszubert/Dokumenty/05_FullDatasetSplit/images/test"
-    val_mask_dir = "/home/pszubert/Dokumenty/05_FullDatasetSplit/MaskRCNN_labels/test"
-    log_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/13_MaskRcnn_Training"
-
     if torch.cuda.is_available():
         print("GPU is available for training.")
         print(f"Using device: {torch.cuda.get_device_name(0)}")
     else:
         print("❌ GPU is not available")
         
+    # HPO Training 
+    train_image_dir = "/home/pszubert/Dokumenty/05_FullDatasetSplit/images/train"
+    train_mask_dir = "/home/pszubert/Dokumenty/05_FullDatasetSplit/MaskRCNN_labels/train"
+    val_image_dir = "/home/pszubert/Dokumenty/05_FullDatasetSplit/images/test"
+    val_mask_dir = "/home/pszubert/Dokumenty/05_FullDatasetSplit/MaskRCNN_labels/test"
+    log_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/13_MaskRcnn_Training"
+    
     #use ram option for smaller datasets
-    train_dataset = GrayscaleMaskRCNNDatasetDrive(train_image_dir, train_mask_dir)
-    val_dataset = GrayscaleMaskRCNNDatasetDrive(val_image_dir, val_mask_dir)
+    train_dataset = GrayscaleMaskRCNNDatasetRAM(train_image_dir, train_mask_dir)
+    val_dataset = GrayscaleMaskRCNNDatasetRAM(val_image_dir, val_mask_dir)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     run_experiments(train_dataset, val_dataset, device, log_dir, num_epochs=100)
