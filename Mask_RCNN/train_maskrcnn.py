@@ -273,6 +273,9 @@ def train_one_epoch_with_progress(model, optimizer, data_loader, device, epoch, 
         logger.info(f"Epoch {epoch}, Batch {i+1}/{total}, Loss: {losses.item():.4f}, Time: {batch_time:.2f}s")
         print_progress_bar(i + 1, total, prefix=f"Epoch {epoch}", suffix="Complete")
 
+        if i == 25:
+            break
+
 
     epoch_time = time.time() - start_epoch
     logger.info(f"Epoch {epoch} completed in {epoch_time:.2f} seconds.")
@@ -295,14 +298,14 @@ def validate_with_logging(model, data_loader, device, epoch, logger):
     pixel_accuracies = []
     map_scores = []
     with torch.no_grad():
-        for images, targets in data_loader:
+        for idx, (images, targets) in enumerate(data_loader):
             images = list(img.to(device) for img in images)
             targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
             outputs = model(images)
 
             # simple metrics
             for output, target in zip(outputs, targets):
-                if len(output["masks"]) == 0:
+                if len(output["masks"]) == 0 or len(target["masks"]) == 0:
                     continue
 
                 pred_mask = output["masks"][0, 0] > 0.5
@@ -317,6 +320,9 @@ def validate_with_logging(model, data_loader, device, epoch, logger):
             # New mAP metric
             map_score = compute_map(outputs, targets)
             map_scores.append(map_score)
+
+            suffix = f'Validation mAP: {map_score:.4f}| IoU: {np.mean(iou_scores):.4f}'
+            print_progress_bar(idx + 1, len(data_loader), prefix=f"Validation Epoch {epoch}", suffix=suffix)
 
     mean_iou = np.mean(iou_scores) if iou_scores else 0.0
     mean_dice = np.mean(dice_scores) if dice_scores else 0.0
@@ -496,13 +502,13 @@ if __name__ == "__main__":
     # HPO Training 
     train_image_dir = "/home/pszubert/Dokumenty/05_FullDatasetSplit/images/train"
     train_mask_dir = "/home/pszubert/Dokumenty/05_FullDatasetSplit/MaskRCNN_labels/train"
-    val_image_dir = "/home/pszubert/Dokumenty/05_FullDatasetSplit/images/test"
-    val_mask_dir = "/home/pszubert/Dokumenty/05_FullDatasetSplit/MaskRCNN_labels/test"
+    val_image_dir = "/home/pszubert/Dokumenty/05_FullDatasetSplit/images/val"
+    val_mask_dir = "/home/pszubert/Dokumenty/05_FullDatasetSplit/MaskRCNN_labels/val"
     log_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/13_MaskRcnn_Training"
     
     #use ram option for smaller datasets
-    train_dataset = GrayscaleMaskRCNNDatasetRAM(train_image_dir, train_mask_dir)
-    val_dataset = GrayscaleMaskRCNNDatasetRAM(val_image_dir, val_mask_dir)
+    train_dataset = GrayscaleMaskRCNNDatasetDrive(train_image_dir, train_mask_dir)
+    val_dataset = GrayscaleMaskRCNNDatasetDrive(val_image_dir, val_mask_dir)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     run_experiments(train_dataset, val_dataset, device, log_dir, num_epochs=100)
