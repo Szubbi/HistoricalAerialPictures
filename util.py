@@ -17,7 +17,9 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.ticker as ticker
 import torch
+import geopandas as gpd
 
+from rasterio.plot import show as rio_show
 from shutil import copy
 from PIL import Image, ImageDraw
 from Mask_RCNN.train_maskrcnn import get_model_instance_segmentation
@@ -153,33 +155,33 @@ def draw_yolo_polygons_on_pil(image, yolo_text_path):
 
     return img
 
+
 def split_geotiff_to_patches(input, patch_size, overlap_ratio):
     if isinstance(input, str):
         with rasterio.open(input) as src:
             img = src.read(1)
             height, width = img.shape
             transform = src.transform
-            
-    if isinstance(input, tuple):
+    else:  # tuple
         img, transform = input
         height, width = img.shape
-    
+
     patches = []
     step = int(patch_size * (1 - overlap_ratio))
-    
+
     for i in range(0, height, step):
         for j in range(0, width, step):
-            patch = img[i:i+patch_size, j:j+patch_size]
-            if patch.shape[0] < patch_size or patch.shape[1] < patch_size:
-                # Handle the last row/column patches
-                patch = img[max(0, height-patch_size):height, max(0, width-patch_size):width]
-            
-            # Calculate the transform for the patch
+            # Adjust start indices if near edge
+            i_start = min(i, height - patch_size)
+            j_start = min(j, width - patch_size)
+
+            patch = img[i_start:i_start + patch_size, j_start:j_start + patch_size]
+
             patch_transform = rasterio.transform.Affine(
-                transform.a, transform.b, transform.c + j * transform.a,
-                transform.d, transform.e, transform.f + i * transform.e
+                transform.a, transform.b, transform.c + j_start * transform.a,
+                transform.d, transform.e, transform.f + i_start * transform.e
             )
-            
+
             patches.append((patch, patch_transform))
 
     return patches
@@ -304,14 +306,70 @@ def load_image(pil_img):
     return img
 
 # Progress bar
-def print_progress_bar(iteration, total, prefix='', suffix='', iter_time = '', length=50):
+def print_progress_bar(iteration, total, prefix='', suffix='', length=50):
     percent = f"{100 * (iteration / float(total)):.1f}"
     filled_length = int(length * iteration // total)
     bar = '=' * filled_length + '-' * (length - filled_length)
-    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end='', flush=True)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end='', flush = True)
     if iteration == total:
         print()
 
-if __name__ == "__main__":
-    pass
 
+
+def plot_gpkg_on_geotiff(
+    tif_path: str,
+    gdf: gpd.GeoDataFrame,
+    figsize: tuple[int, int] = (10, 10),
+    title: str = "GeoPackage polygons over GeoTIFF",
+):
+    """
+    Display a GeoTIFF and overlay polygons from a GeoPackage using matplotlib/rasterio.
+
+    Parameters
+    ----------
+    tif_path : path to the GeoTIFF
+    gpkg_path : path to the GeoPackage
+    layer : optional layer name inside the GeoPackage (None = default/first layer)
+    facecolor, edgecolor, linewidth, alpha : polygon styling
+    figsize : matplotlib figure size
+    """
+    # --- open raster ---
+    with rasterio.open(tif_path) as src:
+        raster_crs = src.crs
+        fig, ax = plt.subplots(figsize=figsize)
+        rio_show(src, ax=ax, cmap = 'gray')  # draws the GeoTIFF in its native CRS
+
+        # keep only valid polygonal geometries (quietly skip empties)
+        gdf = gdf[gdf.geometry.notnull()].copy()
+        if gdf.empty:
+            print("No geometries found in the provided layer.")
+            return ax
+
+        # --- reproject to raster CRS if needed ---
+        if gdf.crs is None:
+            # If the GPKG layer has no CRS defined, you can set it here manually instead of raising.
+            raise ValueError("GeoPackage layer has undefined CRS. Set gdf.set_crs(<epsg>, inplace=True) first.")
+        if raster_crs is not None and gdf.crs != raster_crs:
+            gdf = gdf.to_crs(raster_crs)
+
+        # --- plot polygons on top ---
+        gdf.plot(ax=ax, edgecolor = 'red', alpha = 0.5)
+
+        # --- tighten view to raster extent (helpful when layers are larger) ---
+        left, bottom, right, top = src.bounds
+        ax.set_xlim(left, right)
+        ax.set_ylim(bottom, top)
+
+        ax.set_title(title, fontsize=12)
+        ax.set_xlabel("")  # cleaner map-like look
+        ax.set_ylabel("")
+        ax.set_aspect("equal")
+
+    plt.tight_layout()
+
+    return ax
+
+
+if __name__ == "__main__":
+    for i in range(0, 101):
+        print_progress_bar(i, 100, prefix='Progress:', suffix='Complete')
