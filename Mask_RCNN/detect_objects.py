@@ -7,7 +7,7 @@ import torch
 import geopandas as gpd
 
 
-from util import split_geotiff_to_patches, load_image, load_model, try_except
+from util import split_geotiff_to_patches, load_image, load_model
 from rasterio.features import shapes
 from shapely import geometry
 from datetime import datetime
@@ -88,8 +88,8 @@ def detect_georeferenced_buildings(src_img, model, mask_threshold, patch_size, o
             score = prediction[0]['scores'][i].item()
             mask = prediction[0]['masks'][i, 0].cpu().numpy()
             
-            shape = shapes((mask > MASK_THRESHOLD).astype(np.uint8), 
-                           mask=(mask > MASK_THRESHOLD).astype(np.uint8),
+            shape = shapes((mask > mask_threshold).astype(np.uint8), 
+                           mask=(mask > mask_threshold).astype(np.uint8),
                            transform=transform)
             
             geoms = [geometry.shape(s) for s,v in shape]

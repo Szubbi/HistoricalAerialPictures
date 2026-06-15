@@ -8,6 +8,7 @@ from Mask_RCNN.detect_objects import detect_georeferenced_buildings
 from Yolo.detect_objects import yolo_detect_georeferenced_buildings
 from util import split_geotiff_to_patches, load_image, load_model, plot_gpkg_on_geotiff
 from ultralytics import YOLO
+from Mask_RCNN.train_maskrcnn import get_model_instance_segmentation
 
 '''
 Do Napisania:
@@ -52,31 +53,43 @@ def calculate_metrics(pred_gdf, gt_gdf):
 
 
 if __name__ == "__main__":
-    imgs_dir = r"C:\Users\pzu\Documents\01_Projekty\03_HistoricalAerial\02_TestBW\13_24302_M-34-34-D-b-4.tif"
-    models_dir = r"C:\Users\pzu\Documents\01_Projekty\03_HistoricalAerial\02_TestBW\Models"
-    gpkg_path = r'C:/Users/pzu/Documents/01_Projekty/03_HistoricalAerial/02_TestBW/Data.gpkg'
+    imgs_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/02_TestBW"
+    models_dir = "/mnt/96729E38729E1D55/07_OneDriveBackup/05_PrzetwarzanieDawnychZdjec/03_DataProcessing/05_Models"
+    gpkg_path = os.path.join(imgs_dir, 'Data.gpkg')
     data_layer = 'obszarytestoweortobw_bdot_00'
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     MASK_THRESHOLD = 0.85
 
-    results = gpd.DataFrame(columns=['model', 'IMG', 'TP', 'FP', 'FN', 'IoU', 'F1', 'Precision', 'Recall', 'Accuracy'])
+    results = gpd.GeoDataFrame(columns=['model', 'IMG', 'TP', 'FP', 'FN', 'IoU', 'F1', 'Precision', 'Recall', 'Accuracy'])
 
-    for model in  os.listdir(models_dir):
+    #for model in  os.listdir(models_dir):
+    for model in ['yolo-11l-bw.pt']:
         if model.endswith('.pt'):
-            if 'mask_rcnn' in model:
+            print(f'Processing model: {model}')
+            if 'rcnn' in model:
                 weight_dir = os.path.join(models_dir, model)
-                model = load_model(weight_dir)
+                checkpoint = torch.load(weight_dir, map_location=device)
+
+                model = get_model_instance_segmentation(num_classes=2)
+                if 'model' in checkpoint:
+                    model.load_state_dict(checkpoint['model'])
+                else:
+                    model.load_state_dict(checkpoint)
+
                 model.eval()
                 model.to(device)
 
                 for img in [_ for _ in os.listdir(imgs_dir) if _.endswith('.tif')]:
+                    print(f'Processing image: {img}')
+
                     ground_truth_gdp = get_ground_truth(os.path.join(imgs_dir, img), gpkg_path, data_layer)
 
                     img_path = os.path.join(imgs_dir, img)
                     detected_gdp = detect_georeferenced_buildings(
                         img_path, model, MASK_THRESHOLD, 640, 0.25)
                     treshold_mask = detected_gdp[detected_gdp['score'] > MASK_THRESHOLD]
+                    print(treshold_mask.head())
 
                     TP, FP, FN = calculate_metrics(treshold_mask, ground_truth_gdp)
                     iou = calculate_iou(treshold_mask, ground_truth_gdp)
@@ -110,7 +123,7 @@ if __name__ == "__main__":
 
                     img_path = os.path.join(imgs_dir, img)
                     detected_gdp = yolo_detect_georeferenced_buildings(
-                        img_path, yolo_model, MASK_THRESHOLD, 640, 0.25)
+                        img_path, yolo_model, 640, 0.25)
                     treshold_mask = detected_gdp[detected_gdp['score'] > MASK_THRESHOLD]
 
                     TP, FP, FN = calculate_metrics(treshold_mask, ground_truth_gdp)
@@ -138,7 +151,9 @@ if __name__ == "__main__":
             gpkg_path,
             layer='models_accuracy_results',
             driver='GPKG',
-            mode='w')        
+            mode='w')    
+
+        break    
     
 
     

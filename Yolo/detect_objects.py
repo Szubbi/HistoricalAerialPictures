@@ -42,8 +42,8 @@ def yolo_detect_georeferenced_buildings(src_img, model, patch_size, overlap_rati
                 
                 for id, mask in enumerate(masks):
                     
-                    shape = shapes(mask.data.numpy().astype(np.uint8), 
-                                   mask=mask.data.numpy().astype(np.uint8),
+                    shape = shapes(mask.data.cpu().numpy().astype(np.uint8), 
+                                   mask=mask.data.cpu().numpy().astype(np.uint8),
                                    transform=transform)
                     
                     geoms = [geometry.shape(s) for s,v in shape]
