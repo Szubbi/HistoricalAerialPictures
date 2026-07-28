@@ -3,13 +3,13 @@
 This repository contains code used in the study, that has not been yet officially published. Required information will be added upon the initial acceptance by the journal.
 
 ### Samples Selection
-![Sample Selection](Diagrames\Training_Samples_01.jpg)
+![Sample Selection](Diagrames_Images/Training_Samples_01.jpg)
 
 ### Image conversion process
-![Image Conversion](Diagrames\Image_Convertion_Process.png)
+![Image Conversion](Diagrames_Images/Image_Convertion_Process.png)
 
 Conversion results
-![Conversion sample](Diagrames\Img_Conv_02.png)
+![Conversion sample](Diagrames_Images/Img_Conv_02.png)
 
 ### Study Design
-![Study Design](Diagrames\StudyDesign-General_process_01.png)
+![Study Design](Diagrames_Images/StudyDesign-General_process_01.png)
