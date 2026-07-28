@@ -360,7 +360,8 @@ class ImageConverter:
                 
     def asses_convertion_values(self, params):
         blur_kernel, noise_std_dev, blur_alpha, noise_alpha, clip_limit, \
-        blur_sigma, unsharp_strength = params        
+        blur_sigma, unsharp_strength = params
+        histogram_matching = self.histogram_matching
         
         # Ensure blur_kernel is an odd integer
         blur_kernel = int(np.round(blur_kernel))
@@ -369,7 +370,8 @@ class ImageConverter:
         if blur_kernel <= 0:
             blur_kernel = 1
         
-        self.match_histogram()
+        if histogram_matching:
+            self.match_histogram()
         self.blur(int(blur_kernel))
         self.blend_images('blur', blur_alpha)        
         self.noise(noise_std_dev)
@@ -434,7 +436,8 @@ class ImageConverter:
         return callback
 
     
-    def find_convertion_values(self, epochs:int, treshold:float):
+    def find_convertion_values(self, epochs:int, treshold:float, histogram_matching=True):
+        self.histogram_matching = histogram_matching
         if self.blur_lvl_trg is None or self.noise_lvl_trg is None:
             print('Meassuring source image statistics first')
             self.meassure_src_img()
@@ -473,7 +476,8 @@ class ImageConverter:
     
     
     def convert_image(self):
-        self.match_histogram()
+        if self.histogram_matching:
+            self.match_histogram()
         self.blur(int(self.best_blur_lvl))
         self.blend_images('blur', self.best_blur_alpha)        
         self.noise(self.best_noise_lvl)
